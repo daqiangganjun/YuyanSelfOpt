@@ -4,6 +4,18 @@
 
 ## 2026-08-03
 
+### `20260803-04` chore：改用语义化版本，起始 1.0.0
+
+版本号原由构建时间生成（`yyyyMMddHH`），无法表达变更性质。改为三段式语义化版本，唯一来源为根 `build.gradle` 的 `ext` 块，`app` 与 `yuyansdk` 共用，递增规则写入 `CLAUDE.md`。注意 `versionCode` 由约 20 亿降至 10000，覆盖安装会被拒绝，需先卸载旧包。
+
+- 影响文件：`build.gradle`、`app/build.gradle`、`yuyansdk/build.gradle`、`CLAUDE.md`、`README.md`
+
+### `20260803-03` fix：修复输入法导致系统返回键失效
+
+`InputView.processKeyDown` 对 `KEYCODE_BACK` 无条件返回 true，消费了 DOWN 却使基类的 `event.startTracking()` 从未执行；键盘不可见时 UP 又被放行，DOWN/UP 消费状态不一致，应用侧收到孤立 UP 从而无法触发返回。已将返回键交还 `InputMethodService` 基类处理，并修正 `onKeyDown` / `onKeyUp` 中回落到对方基类方法的复制粘贴错误。
+
+- 影响文件：`yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt`、`yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt`
+
 ### `20260803-02` fix：修复输入视图未创建时按键事件导致的崩溃
 
 `ImeService` 的 `mInputView` / `mCandidateView` 为 `lateinit`，仅在 `onCreateInputView` / `onCreateCandidatesView` 中赋值，而 `isSoftKeyboard` 在 `onStartInput` 阶段即被置位。视图创建前到达的按键事件会触发 `UninitializedPropertyAccessException`。已将两者改为可空类型并对全部调用点统一加防护。

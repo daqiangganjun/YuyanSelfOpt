@@ -3,6 +3,75 @@
   "updatedAt": "2026-08-03",
   "entries": [
     {
+      "id": "20260803-04",
+      "date": "2026-08-03",
+      "type": "chore",
+      "title": "改用语义化版本，起始 1.0.0",
+      "trigger": "用户要求将版本号改为 1.0.0，并确立后续递增规则",
+      "rootCause": "原 versionCode/versionName 由构建时间生成（yyyyMMddHH / yyyyMMdd.HH），只能表达构建时刻，无法表达变更性质与影响范围",
+      "solution": "在根 build.gradle 的 ext 块建立版本号唯一来源（versionMajor/versionMinor/versionPatch），派生 appVersionName 与 appVersionCode（主×10000+次×100+修订）。app 的 versionCode/versionName、APK 产物名、yuyansdk 的 BuildConfig.versionName 与 aar 产物名全部改为引用该来源，删除两个模块中各自的 versionCodeDate()/versionNameDate() 函数",
+      "changedFiles": [
+        {
+          "path": "build.gradle",
+          "notes": "新增 ext 块定义 versionMajor/Minor/Patch 及派生的 appVersionName/appVersionCode"
+        },
+        {
+          "path": "app/build.gradle",
+          "notes": "versionCode/versionName 改引用 rootProject.ext；outputFileName 由 versionCodeDate() 改为 appVersionName；删除 versionCodeDate()/versionNameDate()"
+        },
+        {
+          "path": "yuyansdk/build.gradle",
+          "notes": "BuildConfig.versionName（「关于」界面显示源）与 makeaar 任务的 aar 命名改引用 rootProject.ext.appVersionName；删除 versionNameDate()"
+        },
+        {
+          "path": "CLAUDE.md",
+          "notes": "新增「版本号规范」章节，含递增规则表与维护方式"
+        },
+        {
+          "path": "README.md",
+          "notes": "构建章节的版本号说明与产物路径占位符同步为 versionName"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过（58s），output-metadata.json 确认 versionCode=10000、versionName=1.0.0，产物名为 yuyanSelfOpt_1.0.0_debug.apk",
+      "commits": {
+        "yuyansdk": "dccb830"
+      },
+      "lessons": [
+        "versionCode 从约 20 亿（2026080314）降至 10000 属于降级，系统会拒绝覆盖安装，切换后首次安装必须先卸载旧包",
+        "「关于」界面显示的是 yuyansdk 的 BuildConfig.versionName 而非 app 的 versionName，改版本号时两处必须同源，否则界面显示与实际版本不一致"
+      ]
+    },
+    {
+      "id": "20260803-03",
+      "date": "2026-08-03",
+      "type": "fix",
+      "title": "修复输入法导致系统返回键失效",
+      "trigger": "用户反馈使用该输入法后，安卓全面屏返回键有时失效",
+      "rootCause": "InputView.processKeyDown 对 KEYCODE_BACK 无条件 return true，使 ImeService.onKeyDown 返回 true 消费掉 ACTION_DOWN，且 || 短路导致 super.onKeyDown 永不执行，AOSP InputMethodService.onKeyDown 中的 event.startTracking() 从未被调用。UP 阶段 InputView.processSystemKeys 在 service.isInputViewShown 为 false 时返回 false，回落到 super.onKeyUp 后因 event.isTracking() 为 false 而不处理，最终返回 false。结果是 IME 消费了 DOWN 却放行了 UP，应用侧只收到孤立的 ACTION_UP，其 Activity.onKeyDown 未被调用因而无法 startTracking，onKeyUp 中 isTracking() 为 false，onBackPressed() 不触发",
+      "trigger_condition": "仅在「输入法 Service 已绑定且活跃、但输入视图不可见」的窗口期发生。典型复现：点输入框弹出键盘，收起键盘（焦点仍在输入框），此时按返回键无反应。键盘可见时走 requestHideSelf 分支，行为正常，故表现为「有时失效」",
+      "introducedBy": "上游提交 1374c1e「feat(skb):物理键盘时软键盘显示控制」将 onKeyDown/onKeyUp 的分发条件由 isWindowShown 改为 isSoftKeyboard。改动前 isWindowShown 恰好保证了「窗口不可见时走 super.onKeyDown」的正确路径；改动后 isSoftKeyboard 在无物理键盘机型上恒为 true，所有按键无论窗口是否可见都被 InputView 拦截",
+      "solution": "返回键完全交还 InputMethodService 基类处理：从 processKeyDown 的拦截列表移除 KEYCODE_BACK，并将 processKeyUp 中的系统键分支直接返回 false（删除 processSystemKeys）。基类 handleBack 的语义与原自定义实现等价，但额外正确处理了 tracking 配对、候选栏可见、全屏抽取模式等情况。同时修正 onKeyDown/onKeyUp 中回落到对方基类方法的复制粘贴错误",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "processKeyDown 的 when 分支移除 KEYCODE_BACK；processKeyUp 中 event.isSystem 改为直接 return false；删除 processSystemKeys 函数。requestHideSelf 因 SettingsMenuClick.kt:125 仍在使用而保留"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
+          "notes": "onKeyDown 中两处回落由 super.onKeyUp 修正为 super.onKeyDown；onKeyUp 中三处回落由 super.onKeyDown 修正为 super.onKeyUp"
+        }
+      ],
+      "verification": "已核对 AOSP android14-release 的 InputMethodService.java：onKeyDown 第 3364-3367 行对 BACK 调用 handleBack(false) 成功后执行 event.startTracking() 并返回 true；onKeyUp 第 3416 行要求 event.isTracking() && !event.isCanceled() 才调 handleBack(true)。assembleOfflineDebug 构建通过，用户真机回归确认返回键恢复正常",
+      "commits": {
+        "yuyansdk": "8b8debf"
+      },
+      "lessons": [
+        "IME 对同一按键的 DOWN 与 UP 必须保持一致的消费决策。只消费 DOWN 会破坏应用侧 Activity 的 startTracking/isTracking 配对，使返回键静默失效，且因只在特定窗口期出现而极难定位",
+        "AOSP InputMethodService 已实现完整的返回键处理（handleBack + tracking），自行重写等价逻辑除非有明确理由，否则应直接复用基类",
+        "CandidateView（物理键盘路径）的 processKeyDown 不拦截 BACK，故该路径无此缺陷，修改无需涉及"
+      ]
+    },
+    {
       "id": "20260803-02",
       "date": "2026-08-03",
       "type": "fix",
@@ -89,7 +158,7 @@
         "password": "yuyanime2026",
         "note": "本地自签名，未入库。与他处打包的同名包签名不一致时需先卸载再安装"
       },
-      "outputPath": "app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionCode>_debug.apk",
+      "outputPath": "app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionName>_debug.apk",
       "knownWarnings": [
         "AGP 8.3.2 官方仅测试至 compileSdk 34，本项目用 36，仅警告不影响构建",
         "SDK XML version 4 与命令行工具版本不匹配的警告可忽略"
@@ -99,7 +168,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
         "role": "输入法服务主类，继承 InputMethodService，是所有系统输入回调的入口",
-        "notes": "持有 mInputView（软键盘主视图）与 mCandidateView（物理键盘候选栏）。isSoftKeyboard / isHardwareKeyboard 两个标志由 handleHardwareKeyboard() 统一设置，调用点在 onStartInput 与 onConfigurationChanged。视图为按需创建，状态标志早于视图存在，二者不可互相推断"
+        "notes": "持有 mInputView（软键盘主视图）与 mCandidateView（物理键盘候选栏）。isSoftKeyboard / isHardwareKeyboard 两个标志由 handleHardwareKeyboard() 统一设置，调用点在 onStartInput 与 onConfigurationChanged。视图为按需创建，状态标志早于视图存在，二者不可互相推断。isSoftKeyboard 在无物理键盘机型上恒为 true，不能用它推断输入法窗口是否可见。onKeyDown/onKeyUp 采用『先交给视图处理，未处理则回落 super』的短路结构，回落时必须调用同方向的基类方法，且同一按键的 DOWN 与 UP 必须保持一致的消费决策"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+        "role": "软键盘主视图，承载候选栏、键盘容器与弹窗，同时是按键事件的业务处理入口",
+        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
@@ -133,6 +207,7 @@
       }
     ],
     "constraints": [
+      "版本号唯一来源为根 build.gradle 的 ext 块（versionMajor/versionMinor/versionPatch），禁止在其他文件硬编码版本号；递增规则见 CLAUDE.md「版本号规范」",
       "com.yuyan.inputmethod.core 包内的类名、包名、字段名与预编译 .so 的 JNI 符号硬绑定，严禁重命名或移动",
       "提交信息不得包含任何 AI 工具署名，提交身份统一为 daqiangganjun",
       "yuyansdk 为独立 git 子模块（remote: git@github.com:daqiangganjun/yuyansdk.git），其内改动需在子模块内单独提交，再在主仓库提交指针更新"

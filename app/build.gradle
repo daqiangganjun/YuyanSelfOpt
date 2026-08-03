@@ -10,8 +10,8 @@ android {
         applicationId "com.yuyan.selfopt"
         minSdk 23
         targetSdk 36
-        versionCode Integer.valueOf(versionCodeDate())
-        versionName versionNameDate()
+        versionCode rootProject.ext.appVersionCode
+        versionName rootProject.ext.appVersionName
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         ndk {
@@ -90,17 +90,9 @@ android {
     }
     android.applicationVariants.configureEach { variant ->
         variant.outputs.configureEach {
-            outputFileName = "yuyanSelfOpt_${versionCodeDate()}_${variant.buildType.name}.apk"
+            outputFileName = "yuyanSelfOpt_${rootProject.ext.appVersionName}_${variant.buildType.name}.apk"
         }
     }
-}
-
-static def versionCodeDate() {
-    return new Date().format("yyyyMMddHH", TimeZone.getTimeZone("GMT+8"))
-}
-
-static def versionNameDate() {
-    return new Date().format("yyyyMMdd.HH", TimeZone.getTimeZone("GMT+8"))
 }
 
 dependencies {

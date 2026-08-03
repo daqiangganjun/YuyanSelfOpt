@@ -141,10 +141,10 @@ Windows 下使用 `gradlew.bat`。
 
 产物路径：
 ```
-app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionCode>_debug.apk
-app/build/outputs/apk/offline/release/yuyanSelfOpt_<versionCode>_release.apk
+app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionName>_debug.apk
+app/build/outputs/apk/offline/release/yuyanSelfOpt_<versionName>_release.apk
 ```
-版本号由构建时间自动生成（`yyyyMMddHH`），见 `app/build.gradle` 中的 `versionCodeDate()`。
+版本号采用三段式语义化版本，唯一来源为根 `build.gradle` 的 `ext` 块（`versionMajor` / `versionMinor` / `versionPatch`），递增规则见 `CLAUDE.md`「版本号规范」。
 
 ### 6. 验证与安装
 ```sh
