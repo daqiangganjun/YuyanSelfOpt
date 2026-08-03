@@ -47,7 +47,7 @@
         "构建产物": [
           "useLegacyPackaging 改 false：.so 改为非压缩对齐存储，安装时不再解压（省 16MB），dlopen 可直接页映射",
           "移除 largeHeap：会拉长 GC 停顿且使进程更易被回收，对必须常驻秒起的输入法是负优化",
-          "禁用 EmojiCompatInitializer 与 ProcessLifecycleInitializer，移除 Room MultiInstanceInvalidationService",
+          "移除单进程下未启用的 Room MultiInstanceInvalidationService（曾一并禁用 EmojiCompatInitializer 与 ProcessLifecycleInitializer，导致输入闪退，已恢复，见 postReviewFixes）",
           "resourceConfigurations 限定 zh-rCN；移除无用的 enableJetifier",
           "混淆规则收敛：原先 -keep class org/kotlin/kotlinx/java 等通配以及 @kotlin.Metadata 的 keepclasseswithmembers 等价于保住全部 Kotlin 类，使 minifyEnabled 与 R8 fullMode 基本失效。yuyansdk 改用 consumerProguardFiles 传递规则并去掉自身的 minifyEnabled（project 依赖下只会造成双重混淆），新增 com.yuyan.inputmethod.core 的精确 keep"
         ]
@@ -87,7 +87,7 @@
           "commit": "0395292"
         }
       ],
-      "verification": "分批构建验证，assembleOffline（debug + release）均通过，R8 与资源压缩正常。真机回归由用户执行",
+      "verification": "分批构建验证，assembleOffline（debug + release）均通过。真机回归发现 EmojiCompat 一项导致输入闪退，已修复并重新出包；2.0.1 产物经 apksigner 验签（v1+v2）与 ZIP CRC 全量校验完好",
       "commits": {
         "yuyansdk": "e4c1905, ee5151b, 3b011d8, 0337187, 5c6267f, 0395292"
       },
