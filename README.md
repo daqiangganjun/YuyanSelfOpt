@@ -141,8 +141,8 @@ Windows 下使用 `gradlew.bat`。
 
 产物路径：
 ```
-app/build/outputs/apk/offline/debug/yuyanIme_<versionCode>_debug.apk
-app/build/outputs/apk/offline/release/yuyanIme_<versionCode>_release.apk
+app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionCode>_debug.apk
+app/build/outputs/apk/offline/release/yuyanSelfOpt_<versionCode>_release.apk
 ```
 版本号由构建时间自动生成（`yyyyMMddHH`），见 `app/build.gradle` 中的 `versionCodeDate()`。
 
