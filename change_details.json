@@ -80,7 +80,7 @@
       "network": {
         "proxy": "socks5://127.0.0.1:10808，curl 与 git 可用，Java/Gradle 不可用（仅监听 IPv6）",
         "maven": "使用阿里云镜像，见 build_mirror.init.gradle",
-        "blocked": "github.com、dl.google.com 直连不可用"
+        "blocked": "github.com 与 dl.google.com 的 HTTPS 直连不可用；但 github.com:22 的 SSH 直连可达，故 git push 无需代理"
       },
       "buildCommand": ".\\gradlew.bat assembleOfflineDebug --init-script build_mirror.init.gradle",
       "keystore": {
