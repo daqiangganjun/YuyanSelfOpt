@@ -8,5 +8,7 @@ captures/
 .idea/
 *.jks
 keystore/keystore.properties
+CLAUDE.md
 /.kotlin
 *.log
+build_log.txt

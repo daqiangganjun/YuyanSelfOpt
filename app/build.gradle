@@ -7,7 +7,7 @@ android {
     compileSdk 36
     namespace 'com.yuyan'
     defaultConfig {
-        applicationId "com.yuyan.pinyin"
+        applicationId "com.yuyan.selfopt"
         minSdk 23
         targetSdk 36
         versionCode Integer.valueOf(versionCodeDate())

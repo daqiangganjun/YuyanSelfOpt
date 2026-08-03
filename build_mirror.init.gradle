@@ -1,0 +1,28 @@
+// 本地构建加速：将 Maven 仓库重定向至阿里云镜像，不修改项目内任何构建脚本
+def mirrorUrls = [
+        'https://maven.aliyun.com/repository/public',
+        'https://maven.aliyun.com/repository/google',
+        'https://maven.aliyun.com/repository/gradle-plugin',
+        'https://maven.aliyun.com/repository/central',
+]
+
+def applyMirrors = { RepositoryHandler handler ->
+    handler.clear()
+    mirrorUrls.each { mirrorUrl -> handler.maven { url mirrorUrl } }
+}
+
+settingsEvaluated { settings ->
+    applyMirrors(settings.pluginManagement.repositories)
+}
+
+allprojects { project ->
+    buildscript { applyMirrors(repositories) }
+    applyMirrors(project.repositories)
+
+    // 本机仅有 JDK 21，项目 Java 编译目标为 17，此处对齐 Kotlin/KSP 的 jvmTarget
+    project.tasks.configureEach { task ->
+        if (task.class.name.contains('KotlinCompile') || task.class.name.contains('KspTask')) {
+            task.kotlinOptions.jvmTarget = '17'
+        }
+    }
+}
