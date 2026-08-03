@@ -76,6 +76,12 @@
           "commit": "0395292"
         },
         {
+          "issue": "禁用 EmojiCompatInitializer 导致输入候选词时必定闪退。误以为 YuyanEmojiCompat 已自行管理 EmojiCompat 故自动初始化器多余，实则前者管理的是它自己的两个实例（用于候选词 emoji 替换策略），而布局中的 androidx.emoji2.widget.EmojiTextView 依赖的是该初始化器建立的全局单例 EmojiCompat.get()，两者并非同一对象。候选词条目布局一经 inflate 即抛 IllegalStateException: EmojiCompat is not initialized",
+          "fix": "恢复 EmojiCompatInitializer；ProcessLifecycleInitializer 是其声明的依赖，缺失会使 androidx.startup 抛 StartupException，一并恢复。Room 的 MultiInstanceInvalidationService 与此无关，保持移除",
+          "device": "realme RMX6688 / Android 15 / arm64-v8a",
+          "commit": "c8a33ef"
+        },
+        {
           "issue": "ThemeBackgroundCache 统一按 RGB_565 解码，依据是「键盘背景不需要透明通道」，该假设不成立：裁剪结果以 PNG 无损保存（CustomThemeActivity 显式指定 CompressFormat.PNG），带透明通道的图片 alpha 有效，降色深会使透明区域变黑并在渐变处产生色带",
           "fix": "改回 ARGB_8888。解码缓存本身已消除重复解码的主要开销，色深降级的额外收益不值得画质损失",
           "commit": "0395292"
@@ -92,7 +98,9 @@
         "审查清单中的建议未必都正确，采纳前需核对上下文语义：DiffUtil 一项若照做会引入选中态不刷新的缺陷",
         "把初始化任务从主线程移到后台时必须同时审视执行器的排队顺序：本次将数据库预热移入单线程池后，它被排到了 120MB 词库复制之后，而原本在主线程执行恰好保证了默认数据初始化先行入队。移动位置等于改变时序",
         "引入缓存时必须区分「查询结果为空」与「数据尚未就绪」：SkbMenuCache 把初始化期间的空结果固化到进程结束，是比它所优化的问题更严重的回归",
-        "以「某某不需要某特性」为由降低数据精度前必须验证：键盘背景图以 PNG 无损保存且支持 alpha，RGB_565 会让透明区域变黑"
+        "以「某某不需要某特性」为由降低数据精度前必须验证：键盘背景图以 PNG 无损保存且支持 alpha，RGB_565 会让透明区域变黑",
+        "禁用 androidx.startup 初始化器前必须确认全局单例是否被第三方控件依赖：项目自建 EmojiCompat 实例不等于全局 EmojiCompat.get() 已初始化，EmojiTextView 依赖的是后者。且初始化器之间存在依赖声明，EmojiCompatInitializer 依赖 ProcessLifecycleInitializer，不能只看自身是否被直接使用",
+        "构建通过不等于运行正常。本轮多项改动仅以 assembleOffline 成功作为验证，结果 EmojiCompat 一项在真机上一打字即崩。涉及清单、初始化与资源的改动必须辅以真机冒烟测试"
       ]
     },
     {
