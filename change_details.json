@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-03",
+  "entries": [
+    {
+      "id": "20260803-02",
+      "date": "2026-08-03",
+      "type": "fix",
+      "title": "修复输入视图未创建时按键事件导致的崩溃",
+      "trigger": "用户反馈自打包版本使用中崩溃，提供崩溃日志 yuyanIme_crash_log2026-08-03_13_39_29.zip，四份日志异常一致",
+      "exception": "kotlin.UninitializedPropertyAccessException: lateinit property mInputView has not been initialized，抛出于 ImeService.onKeyDown(ImeService.kt:121)",
+      "device": "realme RMX6688 / Android 15 / arm64-v8a，无物理键盘",
+      "rootCause": "mInputView 与 mCandidateView 声明为 lateinit，仅在系统回调 onCreateInputView / onCreateCandidatesView 中赋值，而这两个回调仅在系统真正需要创建输入视图时才触发。isSoftKeyboard 却在更早的 onStartInput -> handleHardwareKeyboard() 中被置位（无物理键盘时恒为 true）。在「输入法已激活、输入视图尚未创建」的窗口期内，硬件按键事件到达 onKeyDown 即直接解引用未初始化字段。",
+      "introducedBy": "yuyansdk 提交 1374c1e「feat(skb):物理键盘时软键盘显示控制」引入 isSoftKeyboard/isHardwareKeyboard 双标志，发布版若早于该提交则不含此缺陷。与 debug/release 变体无关。",
+      "solution": "将 mInputView、mCandidateView 由 lateinit 改为可空类型，所有调用点改用安全调用；onKeyDown/onKeyUp 在视图缺失时回落 super；onComputeInsets 中原本完全无防护的两处解引用补齐判空。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
+          "changePoints": 14,
+          "notes": "字段声明改可空；onCreateInputView/onCreateCandidatesView 改用 also 赋值；onStartInput、onStartInputView、onUpdateSelection、onWindowShown、onWindowHidden、onUpdateCursorAnchorInfo、onConfigurationChanged、主题变更回调、剪贴板监听回调改安全调用；onKeyDown/onKeyUp 用 `?.xxx == true` 保持原短路语义；onComputeInsets 提取局部变量 inputView/candidateView 并对浮动键盘 region、候选栏 region 判空"
+        }
+      ],
+      "preExistingGuard": "onComputeInsets 第 147 行原本已有 ::mInputView.isInitialized 防护，说明上游作者已察觉该风险，但其余全部入口遗漏",
+      "verification": "assembleOfflineDebug 构建通过（48s），未做真机回归",
+      "commits": {
+        "yuyansdk": "a34bf34",
+        "main": "963468e"
+      },
+      "notPushed": true,
+      "lessons": [
+        "InputMethodService 的视图创建回调是按需触发的，任何在 onStartInput 阶段置位的状态标志都不能用来推断视图是否已存在",
+        "首次提交时误加了 Co-Authored-By: Claude 署名，违反本项目 CLAUDE.md 规则，已通过 amend 修正。提交前必须先读项目 CLAUDE.md"
+      ]
+    },
+    {
+      "id": "20260803-01",
+      "date": "2026-08-01 至 2026-08-03",
+      "type": "chore",
+      "title": "搭建本机离线构建环境，产出首个自签名 debug 包",
+      "trigger": "用户要求在本机为该项目打出 Android 安装包",
+      "obstaclesAndFixes": [
+        {
+          "obstacle": "yuyansdk 子模块目录为空，直连 GitHub 克隆失败（SSL reset / 443 超时）",
+          "fix": "git -c http.proxy=socks5://127.0.0.1:10808 -c https.proxy=socks5://127.0.0.1:10808 submodule update --init --recursive"
+        },
+        {
+          "obstacle": "无 ANDROID_HOME / local.properties，Gradle 找不到 SDK",
+          "fix": "写入 local.properties，sdk.dir 指向 %LOCALAPPDATA%\\Android\\Sdk（该文件在 .gitignore 中）"
+        },
+        {
+          "obstacle": "Maven 依赖走 dl.google.com 极慢，首次构建耗时 13 分钟后仍失败",
+          "fix": "新建 build_mirror.init.gradle，通过 --init-script 将全部仓库重定向至阿里云镜像，实测单个 pom 响应 <0.4s。此法不修改项目内任何构建脚本"
+        },
+        {
+          "obstacle": "为 Gradle 配置 SOCKS5 代理无效，报 Can't connect to SOCKS proxy: Network is unreachable",
+          "fix": "代理仅监听 IPv6 通配地址，Java 网络栈连接失败。放弃代理方案改用镜像。curl 走该代理正常，可用于手动下载"
+        },
+        {
+          "obstacle": "AGP 8.3.2 强制要求 build-tools 34.0.0，本机仅有 36.0.0；Gradle 自动安装走 dl.google.com 挂死 10 小时后失败",
+          "fix": "curl 经 socks5 代理手动下载 build-tools_r34-windows.zip（约 4 秒），解压后将 android-14 目录重命名为 34.0.0 放入 SDK build-tools 下"
+        },
+        {
+          "obstacle": "无 keystore，而 app/build.gradle 中 debug 与 release 均绑定 signingConfigs.release",
+          "fix": "keytool 生成 keystore/yuyan.jks 并写 keystore/keystore.properties（两者均在 .gitignore 中）"
+        },
+        {
+          "obstacle": "Inconsistent JVM-target compatibility：Java 17 vs Kotlin 21",
+          "fix": "本机仅有 JDK 21（CI 用 17），在 build_mirror.init.gradle 中对 KotlinCompile / KspTask 统一设置 jvmTarget = 17"
+        }
+      ],
+      "result": "BUILD SUCCESSFUL，产出 63.09 MB 的 arm64-v8a debug APK，apksigner 验证 v1/v2 签名有效"
+    }
+  ],
+  "knowledge": {
+    "buildEnvironment": {
+      "os": "Windows，终端使用 PowerShell",
+      "jdk": "仅有 JDK 21（无 17）。项目 Java 目标为 17，CI 使用 17，故本机构建必须对齐 Kotlin jvmTarget",
+      "androidSdk": "%LOCALAPPDATA%\\Android\\Sdk，含 platforms android-35/36、build-tools 34.0.0（手动装）与 36.0.0",
+      "ndk": "不需要。yuyansdk/libs 下为预编译 .so，build.gradle 中的 abiFilters 仅作过滤",
+      "network": {
+        "proxy": "socks5://127.0.0.1:10808，curl 与 git 可用，Java/Gradle 不可用（仅监听 IPv6）",
+        "maven": "使用阿里云镜像，见 build_mirror.init.gradle",
+        "blocked": "github.com、dl.google.com 直连不可用"
+      },
+      "buildCommand": ".\\gradlew.bat assembleOfflineDebug --init-script build_mirror.init.gradle",
+      "keystore": {
+        "path": "keystore/yuyan.jks",
+        "alias": "yuyan",
+        "password": "yuyanime2026",
+        "note": "本地自签名，未入库。与他处打包的同名包签名不一致时需先卸载再安装"
+      },
+      "outputPath": "app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionCode>_debug.apk",
+      "knownWarnings": [
+        "AGP 8.3.2 官方仅测试至 compileSdk 34，本项目用 36，仅警告不影响构建",
+        "SDK XML version 4 与命令行工具版本不匹配的警告可忽略"
+      ]
+    },
+    "codeMap": [
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
+        "role": "输入法服务主类，继承 InputMethodService，是所有系统输入回调的入口",
+        "notes": "持有 mInputView（软键盘主视图）与 mCandidateView（物理键盘候选栏）。isSoftKeyboard / isHardwareKeyboard 两个标志由 handleHardwareKeyboard() 统一设置，调用点在 onStartInput 与 onConfigurationChanged。视图为按需创建，状态标志早于视图存在，二者不可互相推断"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
+        "role": "键盘容器的创建与切换管理，单例",
+        "notes": "按 KeyboardType 分发到 T9TextContainer / QwertyContainer / HandwritingContainer / ClipBoardContainer / SymbolContainer / SettingsContainer / CandidatesContainer。自身也持有 lateinit mInputView，但已有 isInitialized 防护"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/FullDisplayKeyboardBar.kt",
+        "role": "全屏显示模式下的键盘栏",
+        "notes": "通过构造参数持有 InputView，非空"
+      },
+      {
+        "path": "app/build.gradle",
+        "role": "应用模块构建配置",
+        "notes": "compileSdk 36 / minSdk 23 / 仅 arm64-v8a；单一渠道 offline；debug 与 release 均使用 signingConfigs.release；versionCode 与 versionName 由构建时间生成（yyyyMMddHH）；产物名在 applicationVariants 中改写"
+      },
+      {
+        "path": "yuyansdk/build.gradle",
+        "role": "SDK 库模块构建配置",
+        "notes": "四架构 abiFilters；offline 渠道的 jniLibs.srcDirs 指向 libs；使用 KSP + Room + kotlinx.serialization + viewBinding；BuildConfig 中注入 git HEAD 与构建时间"
+      },
+      {
+        "path": ".github/workflows/build.yml",
+        "role": "CI 发布流程",
+        "notes": "推送 v* tag 触发，JDK 17，执行 assembleOffline，签名信息全部来自 GitHub Secrets 环境变量（RELEASE_STORE_FILE 等），产物上传至 Release"
+      },
+      {
+        "path": "build_mirror.init.gradle",
+        "role": "本机构建加速与兼容脚本（非上游文件）",
+        "notes": "重定向 Maven 仓库至阿里云镜像，并将 KotlinCompile / KspTask 的 jvmTarget 统一为 17。通过 --init-script 传入，不侵入项目构建脚本"
+      }
+    ],
+    "constraints": [
+      "com.yuyan.inputmethod.core 包内的类名、包名、字段名与预编译 .so 的 JNI 符号硬绑定，严禁重命名或移动",
+      "提交信息不得包含任何 AI 工具署名，提交身份统一为 daqiangganjun",
+      "yuyansdk 为独立 git 子模块（remote: git@github.com:daqiangganjun/yuyansdk.git），其内改动需在子模块内单独提交，再在主仓库提交指针更新"
+    ]
+  }
+}
