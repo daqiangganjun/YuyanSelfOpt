@@ -20,20 +20,11 @@
                 android:resource="@xml/method" />
         </service>
 
-        <!-- EmojiCompat 由 YuyanEmojiCompat 自行以 LOAD_STRATEGY_MANUAL 管理，
-             androidx 的自动初始化器会重复创建实例并调度字体加载；
-             ProcessLifecycleOwner 未被使用。两者均在进程启动前运行，故禁用。 -->
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            tools:node="merge">
-            <meta-data
-                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-                tools:node="remove" />
-            <meta-data
-                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-                tools:node="remove" />
-        </provider>
+        <!-- 注意：EmojiCompatInitializer 不可禁用。YuyanEmojiCompat 管理的是它自己的
+             两个 EmojiCompat 实例（用于候选词的 emoji 替换策略），而布局中的
+             androidx.emoji2.widget.EmojiTextView 依赖的是由该初始化器建立的全局单例
+             EmojiCompat.get()，缺失时构造即抛 IllegalStateException。
+             ProcessLifecycleInitializer 是 EmojiCompatInitializer 声明的依赖，同样不可移除。 -->
 
         <!-- 单进程应用，未启用 Room 多实例失效通知 -->
         <service
