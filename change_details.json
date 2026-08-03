@@ -28,7 +28,7 @@
           "KeyboardManager.release() 与 PopupComponent.release()：两者均为进程级单例，分别通过直接持有和 root.parent 反向持有 InputView，形成两条通向 ImeService 的独立泄漏链",
           "补齐 onFinishInput：重置候选词、清空 EditorInfo 与删除内容撤回队列（后者跨会话保留他人输入内容，兼有隐私问题）",
           "nextPageCandidates 由 plus 逐页复制改为就地追加并限制总量，原先为 O(n²) 分配且无上限",
-          "新增 ThemeBackgroundCache：背景图原先每次取用都重新解码且不关闭流，改为 LruCache 缓存 + RGB_565 解码；InputView 中的缩放结果同样缓存",
+          "新增 ThemeBackgroundCache：背景图原先每次取用都重新解码且不关闭流，改为 LruCache 缓存并保持 ARGB_8888 解码（曾一度降为 RGB_565，评审后回退，见 postReviewFixes）；InputView 中的缩放结果同样缓存",
           "SymbolPreset 拆出为独立的 SymbolPairs：原先与 emoji 大表同属一个 object，敲一次符号就会触发整表初始化与约 1800 次字体可用性检测",
           "线程池由四个精简为一个：默认池与两个定时任务池全项目无调用，核心线程数各为 CPU 核数两倍。保留的单线程池改为惰性创建并允许核心线程超时"
         ],
