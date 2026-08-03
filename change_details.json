@@ -3,6 +3,79 @@
   "updatedAt": "2026-08-03",
   "entries": [
     {
+      "id": "20260803-05",
+      "date": "2026-08-03",
+      "type": "perf",
+      "title": "全量性能与内存优化，版本升至 2.0.0",
+      "trigger": "用户要求按前期代码审查得出的优化清单全量实施",
+      "method": "先按四个维度（键盘渲染、内存与泄漏、引擎与数据层、启动与构建）并行审查代码产出清单，再按风险由低到高分批实施，每批构建验证后单独提交",
+      "changesByArea": {
+        "按键热路径": [
+          "phrase 表 t9/qwerty/lx17 三列建索引：这三列是每次击键的查询条件却只有 content 为主键，原先每击一键在主线程做一次全表扫描。库版本 4 升 5",
+          "去掉 updateCandidatesOrCommitText 中重复的 getRimeContext()：processKey 已通过 updateContext() 缓存，重复调用会再次跨 JNI 编组整页候选。新增 Rime.candidates 读缓存",
+          "setRimePageSize 由每次按键调用改为仅在引擎启动与方案切换后各设置一次",
+          "pinyin2Key 由遍历映射表逐条 split 改为惰性反向索引，单次调用原先产生数百个临时对象",
+          "isLetter/isEnglishWord/isChineseEnd 由每次编译正则改为字符判断，isNumber 的模式提为常量",
+          "同一次调用中重复获取的 compositionText 与 getCurrentRimeSchema() 收敛为局部变量"
+        ],
+        "键盘渲染": [
+          "脏区绘制：onDraw 首行无条件把 mDirtyRect 并成全屏使 clipRect 失效，而按下与抬起各触发一次全量重绘。mDirtyRect 上移到 BaseKeyboardView，新增 invalidateKeys 只累积受影响按键，onBufferDraw 跳过不相交的按键",
+          "按键背景复用单个 GradientDrawable，原先每个按键每次重绘各新建一个",
+          "updateStates 不再 requestLayout：onMeasure 结果只取决于 EnvironmentSingleton 与 MeasureSpec 无关。改用 enableToggleState 既有返回值门控",
+          "MotionEvent.obtain 补齐 recycle，原先每次点击泄漏两个对象出全局池"
+        ],
+        "内存与泄漏": [
+          "KeyboardManager.release() 与 PopupComponent.release()：两者均为进程级单例，分别通过直接持有和 root.parent 反向持有 InputView，形成两条通向 ImeService 的独立泄漏链",
+          "补齐 onFinishInput：重置候选词、清空 EditorInfo 与删除内容撤回队列（后者跨会话保留他人输入内容，兼有隐私问题）",
+          "nextPageCandidates 由 plus 逐页复制改为就地追加并限制总量，原先为 O(n²) 分配且无上限",
+          "新增 ThemeBackgroundCache：背景图原先每次取用都重新解码且不关闭流，改为 LruCache 缓存 + RGB_565 解码；InputView 中的缩放结果同样缓存",
+          "SymbolPreset 拆出为独立的 SymbolPairs：原先与 emoji 大表同属一个 object，敲一次符号就会触发整表初始化与约 1800 次字体可用性检测",
+          "线程池由四个精简为一个：默认池与两个定时任务池全项目无调用，核心线程数各为 CPU 核数两倍。保留的单线程池改为惰性创建并允许核心线程超时"
+        ],
+        "启动链路": [
+          "建库与迁移由 Application.onCreate 主线程移至后台线程",
+          "词库复制缓冲由 1KB 提到 64KB 并改用 use 保证异常路径关流",
+          "AppCompatDelegate.setDefaultNightMode 原在子线程调用，改为切回主线程",
+          "横竖屏切换改用绑定 Service 的作用域并取消上一次任务，原先每次新建无人取消的 scope"
+        ],
+        "数据层": [
+          "剪贴板监听改为后台入库、主线程通知，原先在主线程同步执行插入、计数与带排序子查询的删除",
+          "clipboard.time 建索引",
+          "新增 SkbMenuCache：候选栏菜单配置只在设置界面变动，却在每次候选栏刷新时查库，MenuAdapter 更是每项一查（N+1）",
+          "菜单拖拽排序推迟到 clearView 落库并合并进单个事务，原先 onMove 每次回调对全部项各开一个写事务"
+        ],
+        "构建产物": [
+          "useLegacyPackaging 改 false：.so 改为非压缩对齐存储，安装时不再解压（省 16MB），dlopen 可直接页映射",
+          "移除 largeHeap：会拉长 GC 停顿且使进程更易被回收，对必须常驻秒起的输入法是负优化",
+          "禁用 EmojiCompatInitializer 与 ProcessLifecycleInitializer，移除 Room MultiInstanceInvalidationService",
+          "resourceConfigurations 限定 zh-rCN；移除无用的 enableJetifier",
+          "混淆规则收敛：原先 -keep class org/kotlin/kotlinx/java 等通配以及 @kotlin.Metadata 的 keepclasseswithmembers 等价于保住全部 Kotlin 类，使 minifyEnabled 与 R8 fullMode 基本失效。yuyansdk 改用 consumerProguardFiles 传递规则并去掉自身的 minifyEnabled（project 依赖下只会造成双重混淆），新增 com.yuyan.inputmethod.core 的精确 keep"
+        ]
+      },
+      "rejectedAfterVerification": [
+        "assets noCompress：原判断认为可让 rime 直接 mmap 从而免去复制。实测词库压缩比 2.5:1（125.7MB 压到 50MB），启用后 APK 将从 71MB 涨到约 146MB；而 native 层 startupRime 接收的是文件系统路径，无法从 APK 内 mmap，词库必须复制到 filesDir，noCompress 只能省一次 inflate，属净损失，已撤销",
+        "strip .so：原判断认为 arm64 的 16MB 相对 armeabi-v7a 的 3.1MB 偏大，疑似含符号表。file 检查显示全部 .so 均已 stripped，体积差异源于 arm64 目录多了 4 个手写相关库，已撤销"
+      ],
+      "deliberatelySkipped": [
+        "CandidatesMenuAdapter 改走 DiffUtil：其 areContentsTheSame 只比较 funName，而 item 高亮态取决于十余个偏好（isSettingsMenuSelect），改用 DiffUtil 会导致选中态不刷新",
+        "CandidatesMenuAdapter 中 GradientDrawable 提为共享字段：多个 View 共用一个 Drawable 会有状态串扰，item 数不足 20",
+        "CustomThemeActivity 的 srcImageBuffer 改为流式复制：需保留 Uri，而从选图到保存之间若发生配置变更导致 Activity 重建，临时授予的 URI 权限可能失效；该字段随 Activity 销毁即释放，非常驻内存",
+        "移除 allowMainThreadQueries：热路径查询已逐个消除，但设置类界面仍有同步调用，直接移除会在遗漏处抛异常，对常驻输入法风险过高",
+        "移除 navigation 与 material 依赖：需重写设置页导航与 UI，约 3MB 收益对应中等规模重构，风险收益比不佳",
+        "KeyboardManager.setData 中的 keyboards.clear()：上游 TODO 注明是绕过「原输入界面失效」的权宜之计，属唤起卡顿主因但需重新设计容器与 InputView 的持有关系，留待单独评估"
+      ],
+      "verification": "分批构建验证，assembleOffline（debug + release）均通过，R8 与资源压缩正常。真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "e4c1905, ee5151b, 3b011d8, 0337187, 5c6267f"
+      },
+      "lessons": [
+        "静态分析得出的优化项必须实测验证：noCompress 与 strip .so 两项在实测下均被推翻，前者反而会让 APK 翻倍",
+        "putIfAbsent 等 Java 8 默认方法在 minSdk 23 且未启用 desugaring 时会抛 NoSuchMethodError，Kotlin 代码中需改用 containsKey 判断",
+        "为数据库实体加索引必须同步升版本号并编写 Migration，且索引名要与 @Index 生成的名称一致，否则 Room 的 schema 校验不通过",
+        "审查清单中的建议未必都正确，采纳前需核对上下文语义：DiffUtil 一项若照做会引入选中态不刷新的缺陷"
+      ]
+    },
+    {
       "id": "20260803-04",
       "date": "2026-08-03",
       "type": "chore",
