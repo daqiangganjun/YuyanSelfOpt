@@ -4,6 +4,16 @@
 
 ## 2026-08-04
 
+### `20260804-04` feat：手写改用 ML Kit，提供模型手动下载与状态显示
+
+手写始终无候选的根因是搜狗商业库的授权：`libhandwriting.so` 内硬编码四个包名
+`com.yuyan.pinyin.{offline,online}.{debug,release}`，本分支改名为 `com.yuyan.selfopt` 后
+license 校验失败（真机日志确认 init/mode/reset/input 全为 false）。改用 ML Kit 数字墨水识别，
+其模型需运行时下载，故在手写设置页提供手动下载与五种状态显示，模型未就绪时键盘给出明确提示。
+
+- 提交：主仓库见本次记录，yuyansdk `a806081`
+- 影响文件：新增 `MlKitHandwritingModel.kt`/`MlKitHandwritingEngine.kt`，改动 `HandwritingKeyboard.kt`、`HandwritingSettingsFragment.kt`、`yuyansdk/build.gradle`
+
 ### `20260804-03` feat：拼音浮动气泡与搜狗风格界面，版本升至 2.2.0
 
 拼音串原与候选词按 1:1.9 瓜分候选栏，致候选词被压在下半区且随拼音有无跳动；现移出候选栏改为

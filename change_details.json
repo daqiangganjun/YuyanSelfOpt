@@ -3,6 +3,57 @@
   "updatedAt": "2026-08-04",
   "entries": [
     {
+      "id": "20260804-04",
+      "date": "2026-08-04",
+      "type": "feat",
+      "title": "手写改用 ML Kit 并提供模型手动下载与状态显示",
+      "trigger": "手写始终无候选，排查后确认为搜狗商业库授权失效；用户选择改用 ML Kit，并要求设置中提供手动拉取与明确的状态标注",
+      "rootCause": "libhandwriting.so 内硬编码四个授权包名 com.yuyan.pinyin.{offline,online}.{debug,release}，libSogouShell.so 含完整 RSA 授权校验（CheckLicenseFile/VerifyPackage/有效期/次数限制）。本分支在 ee799b4 将 applicationId 改为 com.yuyan.selfopt 以与原版共存，运行时包名不在白名单内，license 校验失败。真机日志证实 init=false、mode=false、reset=false、input=false、getCandidates 返回 null",
+      "diagnosis": "通过 adb 抓 logcat 加临时诊断日志定位；并比对设备 files/hw 与 APK assets/hw，13 个文件大小完全一致，排除词库缺失；再用 ELF 解析从 .so 提取出硬编码包名与授权符号",
+      "solution": "接入 com.google.mlkit:digital-ink-recognition 承担手写识别。新增 MlKitHandwritingModel 管理模型下载/删除/状态，HandwritingKeyboard 改为采集带时间戳的 Ink 笔划并调用 MlKitHandwritingEngine，手写设置页新增模型管理项，模型未就绪时键盘给出一次性提示",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/build.gradle",
+          "notes": "新增 ML Kit 依赖，固定 17.0.1"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/MlKitHandwritingModel.kt",
+          "notes": "新增：模型下载/删除/状态查询，五种状态含失败原因"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/MlKitHandwritingEngine.kt",
+          "notes": "新增：识别与候选转换，沿用 PinyinHelper 生成拼音注释"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/HandwritingKeyboard.kt",
+          "notes": "并行采集 Ink 笔划；识别改走 ML Kit；模型未就绪时一次性 Toast 提示"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/HandwritingSettingsFragment.kt",
+          "notes": "经 onPreferenceUiCreated 钩子插入模型管理项，展示状态并支持下载/删除"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/HWEngine.kt",
+          "notes": "保留但停用，加注说明授权约束与恢复方式"
+        }
+      ],
+      "versionChoice": "固定 17.0.1：19.x 由 Kotlin 2.1 编译，元数据版本 2.1.0 与本项目 Kotlin 1.9.22 期望的 1.9.0 不兼容导致编译失败；且 19.x 将包名迁至 digitalink.recognition，而 17.0.1 仍为文档标准的 digitalink 且不含任何 kotlin_module，冲突风险最低",
+      "knownLimitations": [
+        "ML Kit 中文模型不能随包分发，Google 明确拒绝了打包进 APK 的需求（googlesamples/mlkit#573），只能运行时下载约 20MB",
+        "模型下载通道依赖 Google Play 服务并需连通 Google 服务器，无 GMS 或网络不可达的设备无法完成下载，此时手写不可用但会有明确提示",
+        "当前 APK 中 ML Kit 的 libdigitalink.so(10.9MB) 与已失效的搜狗四个 so(11.3MB) 及 8.5MB 手写词库并存，约 20MB 为死重量，待决定是否移除"
+      ],
+      "verification": "assembleOfflineDebug 构建通过；因设备断开未做真机验证，模型能否下载成功取决于设备是否具备 GMS",
+      "commits": {
+        "yuyansdk": "a806081"
+      },
+      "lessons": [
+        "预编译商业 .so 可能内嵌包名白名单与 RSA 授权校验，改 applicationId 会静默使其失效。集成此类库前应先用 ELF 解析确认是否存在硬编码约束",
+        "同类问题在缺乏运行时日志时无法靠读代码定位：本次前后三轮修改都指向错误方向，直到 adb 日志给出 init=false 才锁定授权层",
+        "三方库的包名可能随大版本迁移（ML Kit 19.x 迁至 digitalink.recognition），且高版本可能因 Kotlin 元数据版本与项目编译器不兼容而无法使用，选版本时需同时核对这两点"
+      ]
+    },
+    {
       "id": "20260804-03",
       "date": "2026-08-04",
       "type": "feat",
