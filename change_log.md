@@ -4,15 +4,18 @@
 
 ## 2026-08-04
 
-### `20260804-04` feat：手写改用 ML Kit，提供模型手动下载与状态显示
+### `20260804-04` feat：手写改用 ML Kit 并移除搜狗库，版本升至 2.3.0
 
 手写始终无候选的根因是搜狗商业库的授权：`libhandwriting.so` 内硬编码四个包名
 `com.yuyan.pinyin.{offline,online}.{debug,release}`，本分支改名为 `com.yuyan.selfopt` 后
 license 校验失败（真机日志确认 init/mode/reset/input 全为 false）。改用 ML Kit 数字墨水识别，
 其模型需运行时下载，故在手写设置页提供手动下载与五种状态显示，模型未就绪时键盘给出明确提示。
 
-- 提交：主仓库见本次记录，yuyansdk `a806081`
-- 影响文件：新增 `MlKitHandwritingModel.kt`/`MlKitHandwritingEngine.kt`，改动 `HandwritingKeyboard.kt`、`HandwritingSettingsFragment.kt`、`yuyansdk/build.gradle`
+搜狗那套在本分支包名下完全不可用，且不宜私自占用他人授权，连同四个预编译库与手写词库一并移除，
+APK 由 91.8MB 降至 67.4MB。
+
+- 提交：主仓库见本次记录，yuyansdk `a806081`、`9ab6357`
+- 影响文件：新增 `MlKitHandwritingModel.kt`/`MlKitHandwritingEngine.kt`；改动 `HandwritingKeyboard.kt`、`HandwritingSettingsFragment.kt`、`Launcher.kt`、`CustomConstant.kt`、`yuyansdk/build.gradle`；删除 `HWEngine.kt`、`core/HandWriting.kt`、四个搜狗 `.so` 与 `assets/hw`
 
 ### `20260804-03` feat：拼音浮动气泡与搜狗风格界面，版本升至 2.2.0
 
