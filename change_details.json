@@ -3,6 +3,71 @@
   "updatedAt": "2026-08-04",
   "entries": [
     {
+      "id": "20260804-02",
+      "date": "2026-08-04",
+      "type": "feat",
+      "title": "界面调整：顶栏居中、按键标签排版、悬浮键盘圆角与拖动，版本升至 2.1.0",
+      "trigger": "用户提出三处界面问题并附截图：顶栏视觉不居中、字号放大后功能键与附带符号过于突出、悬浮键盘无圆角且无法拖动",
+      "changes": [
+        {
+          "item": "顶栏垂直居中",
+          "rootCause": "CandidatesBar 在 sdk_skb_container.xml 中为 wrap_content，高度由内容（menuHeight = heightForCandidatesArea × 0.8）撑开，内容上下没有留白；而键盘区首行按键上方有 keyYMargin 的空隙，导致上方间隙约等于 0、下方间隙约等于 keyYMargin，顶栏因此偏上",
+          "fix": "在 CandidatesBar.initialize() 中设置与 keyYMargin 等值的顶部内边距，使上下视觉对称"
+        },
+        {
+          "item": "附带符号改为角标",
+          "rootCause": "经典（Yuyan）风格下附带符号居中显示且不透明，与主标签争夺视觉重心",
+          "fix": "三种风格统一为右上角半透明（alpha 128）角标，与三星风格一致"
+        },
+        {
+          "item": "功能键字号",
+          "rootCause": "所有按键共用 keyTextSize，字号调到 140% 后「符号」「123」「分词」等多字符功能键显得过大",
+          "fix": "标签多于一个字符时按 0.75 缩放"
+        },
+        {
+          "item": "主标签垂直居中",
+          "rootCause": "基线取自构造时默认字号的 FontMetricsInt 并作固定偏移，字号变化后位置会偏；且存在附带符号时会额外下移，而角标化后中部已无占用",
+          "fix": "改用当前字号的 FontMetrics 计算居中基线，移除下移逻辑，删去不再使用的 mFmi 字段"
+        },
+        {
+          "item": "悬浮键盘圆角",
+          "rootCause": "mSkbRoot 仅设置主题背景（多数内置主题为 ColorDrawable），全项目未对其设置过 cornerRadius / outlineProvider / clipToOutline",
+          "fix": "悬浮模式下为 mSkbRoot 设置 ViewOutlineProvider 并开启 clipToOutline，纯色与图片主题均生效；非悬浮恢复 BACKGROUND 轮廓"
+        },
+        {
+          "item": "悬浮键盘拖动",
+          "rootCause": "拖动逻辑本已存在，但纵向 clamp 上界写作 this.height - mSkbRootHeight。InputView 为 wrap_content，其高度恒等于 mSkbRoot.height + bottomPadding，该上界因此恒等于当前 bottomPadding 本身，向上拖动每次都被钳回原值，只能向下移动，到底（0）后彻底锁死。此外 initView 设置的拖动条高度 heightForKeyboardMove 被 initNavbarBackground 的 insets 回调在悬浮分支覆盖为 0，且未水平居中，实际只剩左上角一小块可触摸",
+          "fix": "纵向上界改以屏幕高度为基准（InputView 与 BaseContainer 两处）；insets 回调保持拖动条高度一致；拖动条改为占满整条宽度并居中"
+        }
+      ],
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt",
+          "notes": "initialize() 增加顶部内边距"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/TextKeyboard.kt",
+          "notes": "附带符号角标化；功能键字号缩放；主标签按当前字号居中；删除 mFmi"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "新增 applyFloatKeyboardOutline 与轮廓提供者；修正纵向拖动上界；拖动条高度与居中；insets 回调不再抹平拖动条高度"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/BaseContainer.kt",
+          "notes": "键盘高度面板中的拖动上界同步修正"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过，2.1.0 产物经 apksigner 验签与 ZIP CRC 校验完好；真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "2a3faf7"
+      },
+      "lessons": [
+        "wrap_content 的容器不能用自身尺寸推导子元素的可移动范围：InputView 高度包含 padding 本身，以其为 clamp 上界会得到恒等于当前值的死循环边界",
+        "同一属性在 initView 与 insets 回调两处设置时必须保持一致，否则后到的回调会静默覆盖前者"
+      ]
+    },
+    {
       "id": "20260804-01",
       "date": "2026-08-04",
       "type": "fix",

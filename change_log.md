@@ -4,6 +4,15 @@
 
 ## 2026-08-04
 
+### `20260804-02` feat：界面调整，版本升至 2.1.0
+
+顶栏因 `CandidatesBar` 为 wrap_content 而内容紧贴上沿、下方却隔着按键的 `keyYMargin`，补等值顶部
+内边距使其视觉居中；附带符号统一为右上角半透明角标，功能键字号按 0.75 缩放，主标签改用当前字号度量
+居中。悬浮键盘补圆角（`ViewOutlineProvider` 裁剪），并修正纵向拖动 clamp 上界恒等于当前值导致的锁死。
+
+- 提交：主仓库见本次记录，yuyansdk `2a3faf7`
+- 影响文件：`CandidatesBar.kt`、`TextKeyboard.kt`、`InputView.kt`、`BaseContainer.kt`
+
 ### `20260804-01` fix：修复手写识别空指针闪退，版本升至 2.0.2
 
 `HWEngine` 把 `HandWriting.init` 放在 Kotlin object 的 init 块中且不检查返回值，而该块只执行
