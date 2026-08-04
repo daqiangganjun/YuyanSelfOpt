@@ -4,6 +4,15 @@
 
 ## 2026-08-04
 
+### `20260804-03` feat：拼音浮动气泡与搜狗风格界面，版本升至 2.2.0
+
+拼音串原与候选词按 1:1.9 瓜分候选栏，致候选词被压在下半区且随拼音有无跳动；现移出候选栏改为
+键盘上方的浮动气泡，候选词独占整条。附带符号回退为上部居中并全量对齐搜狗映射，亮色主题配色与
+功能键上色范围一并对齐。移除数字行功能，角标固定使用数字版表；库升至版本 6 清理残留菜单记录。
+
+- 提交：主仓库见本次记录，yuyansdk `ef6c8ae`
+- 影响文件：`InputView.kt`、`CandidatesBar.kt`、`TextKeyboard.kt`、`KeyPreset.kt`、`ThemePreset.kt`、`KeyboardLoaderUtil.kt`、`DataBaseKT.kt` 等 16 个
+
 ### `20260804-02` feat：界面调整，版本升至 2.1.0
 
 顶栏因 `CandidatesBar` 为 wrap_content 而内容紧贴上沿、下方却隔着按键的 `keyYMargin`，补等值顶部

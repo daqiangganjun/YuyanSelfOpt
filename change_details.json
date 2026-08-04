@@ -3,6 +3,52 @@
   "updatedAt": "2026-08-04",
   "entries": [
     {
+      "id": "20260804-03",
+      "date": "2026-08-04",
+      "type": "feat",
+      "title": "拼音浮动气泡、界面对齐搜狗风格、移除数字行，版本升至 2.2.0",
+      "trigger": "用户反馈打字时拼音挤压候选词导致下沉、展开候选难以点击，并要求界面模仿搜狗输入法；同时要求删除数字行功能",
+      "changes": [
+        {
+          "item": "拼音浮动气泡",
+          "rootCause": "拼音串与候选词在 mCandidatesDataContainer 中按 heightForcomposing : heightForCandidates = 1 : 1.9 瓜分整条候选栏，候选词被固定压在下半区；且 mComposingView 无独立显隐控制，联想词场景下拼音为空串仍占位",
+          "fix": "移出候选栏，改挂在 InputView 内 mSkbRoot 之上（addRule(ABOVE)），按内容空否显隐，候选词容器独占整条并由 CENTER_VERTICAL 居中。之所以不会多顶起宿主应用，是因为 onComputeInsets 的 contentTopInsets 取自 mSkbRoot 而非 InputView；touchableInsets 为 TOUCHABLE_INSETS_CONTENT，气泡区不吃触摸"
+        },
+        {
+          "item": "按键标签排版",
+          "fix": "附带符号改回按键上部居中、主标签相应下移（2.1.0 曾按三星风格改为右上角角标，本次依搜狗截图回退），保留半透明灰度"
+        },
+        {
+          "item": "附带符号映射",
+          "fix": "全量对齐搜狗：字母行沿用数字，A~L 为 ~!@#%“”*?，Z~M 为 ()-_:;/。经核对 PopupSmallPreset 已覆盖全部新符号，长按气泡无需补表"
+        },
+        {
+          "item": "亮色主题配色",
+          "fix": "键盘底色与候选栏统一为偏蓝浅灰 #DEE1E9，字母键纯白，文字近黑 #1F1F1F；功能键上色范围由仅空格扩大到回车/退格/Shift/符号/123/中英/返回，回车不再使用强调色"
+        },
+        {
+          "item": "移除数字行",
+          "rootCause": "abcNumberLine 兼任两职：是否插入顶部数字行，以及字母键角标显示符号还是数字",
+          "fix": "移除功能、偏好、菜单项与布局构建；角标固定使用数字版表（恰与搜狗一致），三张不再引用的符号版表一并删除"
+        },
+        {
+          "item": "数据库迁移",
+          "rootCause": "历史库中残留 NumberRow 菜单记录，而 SkbMenuMode.decode 使用 valueOf，解码未知枚举名会抛 IllegalArgumentException，打开设置菜单即崩溃",
+          "fix": "库版本 5 升 6，新增迁移删除该记录；并为读取历史数据的两处调用点提供 decodeOrNull 容错"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过，2.2.0 产物经 apksigner 验签与 ZIP CRC 校验完好；真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "ef6c8ae"
+      },
+      "pending": "手写识别无候选的问题仍未解决，需连接设备抓取 logcat 判断 initWithDirectory 失败原因",
+      "lessons": [
+        "删除带枚举名的持久化数据时，必须同时提供数据迁移与解码容错：历史库中的记录不会随代码删除而消失，valueOf 遇到未知名称会直接抛异常",
+        "用正则批量改写源码时要留意字符串内的转义引号：本次 \"[^\"]*\" 在匹配 Kotlin 的 \"\\\"\" 时越界，产生了语法错误",
+        "同一方法内的局部变量会遮蔽 apply 块中的同名属性（updateTheme 中的 background），此类赋值需显式限定 this"
+      ]
+    },
+    {
       "id": "20260804-02",
       "date": "2026-08-04",
       "type": "feat",
