@@ -1,7 +1,37 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-03",
+  "updatedAt": "2026-08-04",
   "entries": [
+    {
+      "id": "20260804-01",
+      "date": "2026-08-04",
+      "type": "fix",
+      "title": "修复手写识别空指针闪退，版本升至 2.0.2",
+      "trigger": "用户反馈 2.0.1 手写输入闪退，提供崩溃日志 crash-2026-08-04-09-10-37",
+      "exception": "java.lang.NullPointerException: Attempt to read from null array，抛出于 HWEngine.recognitionData(HWEngine.kt:32)",
+      "device": "realme RMX6688 / Android 15 / arm64-v8a",
+      "rootCause": "HWEngine 是 Kotlin object，原实现把 HandWriting.init 放在 init 块中且不检查返回值。object 的 init 只在首次访问时执行一次——若那一刻手写词库尚未复制完成（首次安装场景），initWithDirectory 返回 false，此后再无重试机会；而 recognitionData 照常调用未就绪的 native，getCandidates() 返回 null，getCandidatesPyComposition()[0] 即抛 NPE。表现为手写抬笔即闪退，且状态持续到进程重启",
+      "introducedBy": "上游既有缺陷，非本轮性能优化引入。本轮将词库复制缓冲由 1KB 提到 64KB 反而缩小了触发窗口",
+      "solution": "改为每次识别前经 ensureEngineReady() 惰性初始化并缓存成功状态，失败直接返回，待词库就绪后自动重试；同时补齐 native 返回值的空防护",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/HWEngine.kt",
+          "notes": "init 块只保留拼音格式配置；新增 ensureEngineReady() 做惰性初始化与重试；inputHWPoints 返回值纳入判断；候选数组改用 firstOrNull 并跳过 null 元素，避免 candidate!! 崩溃"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/core/HandWriting.kt",
+          "notes": "getCandidates() 与 getCandidatesPyComposition() 的返回类型如实标注为可空。可空性仅为 Kotlin 注解，JNI 签名 [[Ljava/lang/String; 不变，不影响与预编译 .so 的符号绑定"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过，2.0.2 产物经 apksigner 验签与 ZIP CRC 全量校验完好；真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "615153b"
+      },
+      "lessons": [
+        "Kotlin object 的 init 块只执行一次，不适合放置可能失败且需要重试的初始化。依赖外部资源（词库、模型文件）的初始化应改为惰性检查并缓存成功状态",
+        "external 声明的返回类型可空性必须与 native 实际行为一致。JNI 签名基于类型擦除后的 Java 类型，调整 Kotlin 可空标注不会破坏符号绑定，可安全用于补空防护"
+      ]
+    },
     {
       "id": "20260803-05",
       "date": "2026-08-03",
