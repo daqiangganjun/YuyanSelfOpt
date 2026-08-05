@@ -3,6 +3,80 @@
   "updatedAt": "2026-08-05",
   "entries": [
     {
+      "id": "20260805-02",
+      "date": "2026-08-05",
+      "type": "feat",
+      "title": "手写模型提示常驻键盘、字号与高度解耦及默认值调整，版本升至 2.4.0",
+      "trigger": "用户要求默认不加粗、手写未下载模型时给出明显提示与下载入口、降低默认键盘高度并修复拉伸影响字号、缩减全面屏底栏最小高度",
+      "changes": [
+        {
+          "item": "手写模型提示常驻",
+          "rootCause": "模型未下载时仅有一次性 Toast，用户切到手写后无从知道该做什么，也没有下载入口",
+          "fix": "新增 HandwritingModelTipView 覆盖于手写区域，给出说明、下载按钮与「前往设置」入口；下载中显示不确定进度条，失败时展示具体原因，就绪后自动隐藏。ML Kit 的 download() 只回调成败、不提供百分比，故无法显示精确进度"
+        },
+        {
+          "item": "模型状态改为多监听",
+          "rootCause": "onStateChanged 是单个回调，设置页与手写键盘同时监听会互相覆盖",
+          "fix": "改为 CopyOnWriteArrayList 监听器集合，注册时立即回推当前状态"
+        },
+        {
+          "item": "字号与键盘高度解耦",
+          "rootCause": "keyTextSize/keyTextSmallSize 以 skbHeight 为基准，而 skbHeight = 屏高 × 用户可调的 keyboardHeightRatio，导致拉伸键盘高度时字号一并变化",
+          "fix": "字号基准改用固定的默认高度比例（竖屏 0.3、横屏 0.5），与用户调节解耦；默认状态下字号与此前完全一致"
+        },
+        {
+          "item": "默认不加粗",
+          "fix": "keyboard_font_bold_enable 由 true 改为 false"
+        },
+        {
+          "item": "默认键盘高度",
+          "fix": "keyboardHeightRatio 0.3 → 0.27，调节步长为 0.01 即降三档"
+        },
+        {
+          "item": "全面屏底栏高度",
+          "fix": "heightForFullDisplayBar 由候选栏高度的 0.7 倍减半至 0.35 倍；该栏可向上平移却无法调更矮，原值留白过多"
+        }
+      ],
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/HandwritingModelTipView.kt",
+          "notes": "新增：手写模型提示与下载入口"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/HandwritingContainer.kt",
+          "notes": "挂载提示层"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/HandwritingKeyboard.kt",
+          "notes": "移除重复的一次性 Toast"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/MlKitHandwritingModel.kt",
+          "notes": "状态回调改为监听器集合"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/singleton/EnvironmentSingleton.kt",
+          "notes": "字号基准与高度解耦；全面屏底栏减半"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ThemePrefs.kt",
+          "notes": "默认不加粗"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/AppPrefs.kt",
+          "notes": "默认键盘高度比例 0.27"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过，产物 67.36MB；真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "af76305"
+      },
+      "lessons": [
+        "派生量的基准要选对：字号本应只由字号设置决定，却挂在会被用户调节的键盘高度上，于是调高度连带改字号。凡「A 不应随 B 变」的量，就不能拿 B 的派生值做基准",
+        "单个回调字段在有第二个消费者时必然出问题：MlKitHandwritingModel 的状态原先只支持一个监听者，设置页与键盘会互相覆盖，应一开始就用集合"
+      ]
+    },
+    {
       "id": "20260805-01",
       "date": "2026-08-05",
       "type": "fix",

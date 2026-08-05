@@ -4,6 +4,15 @@
 
 ## 2026-08-05
 
+### `20260805-02` feat：手写模型提示常驻键盘与字号解耦，版本升至 2.4.0
+
+手写模型未下载时改为在手写区域常驻提示，直接提供下载按钮、不确定进度条与失败原因，取代原先的
+一次性 Toast；模型状态回调改为多监听以便设置页与键盘并存。字号原以键盘实际高度为基准，导致拉伸
+高度连带改变字号，现改用固定默认比例解耦。默认值：不再加粗、键盘高度 0.3→0.27、全面屏底栏减半。
+
+- 提交：主仓库见本次记录，yuyansdk `af76305`
+- 影响文件：新增 `HandwritingModelTipView.kt`；改动 `HandwritingContainer.kt`、`HandwritingKeyboard.kt`、`MlKitHandwritingModel.kt`、`EnvironmentSingleton.kt`、`ThemePrefs.kt`、`AppPrefs.kt`
+
 ### `20260805-01` fix：修复空格滑动移光标导致失焦，悬浮键盘气泡圆角，版本升至 2.3.4
 
 空格滑动移光标是向应用下发真实的 DPAD_LEFT/RIGHT 按键。光标已在文本首末端时，越界的方向键会被
