@@ -15,7 +15,7 @@ buildscript {
 // 语义化版本单一来源，app 与 yuyansdk 共用。递增规则见 CLAUDE.md「版本号规范」
 ext {
     versionMajor = 2
-    versionMinor = 4
+    versionMinor = 5
     versionPatch = 0
     appVersionName = "$versionMajor.$versionMinor.$versionPatch"
     appVersionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch

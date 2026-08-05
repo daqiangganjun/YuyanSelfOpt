@@ -3,6 +3,59 @@
   "updatedAt": "2026-08-05",
   "entries": [
     {
+      "id": "20260805-03",
+      "date": "2026-08-05",
+      "type": "feat",
+      "title": "顶栏加入切换键盘、压缩全面屏底栏与默认值调整，版本升至 2.5.0",
+      "trigger": "用户反馈上一版全面屏底栏高度没有变化，并要求顶栏默认加切换键盘、键盘高度改 0.28、剪贴板上限放宽",
+      "changes": [
+        {
+          "item": "全面屏底栏高度",
+          "rootCause": "上一版把 heightForFullDisplayBar 减半却毫无效果——该值只赋给容器的 minimumHeight（最小高度），而底栏实际高度由 FullDisplayKeyboardBar 自身的 setPadding(20,10,20,20) 与图标撑开，最小高度根本没起作用",
+          "fix": "将该栏上下内边距由 10dp/20dp 收到 4dp/8dp"
+        },
+        {
+          "item": "顶栏加入切换键盘",
+          "rootCause": "候选栏菜单列表为 reverseLayout（position 越大越靠左），而 getALlBarMenu 没有 ORDER BY，顺序全凭数据库返回，无法稳定指定位置",
+          "fix": "getALlBarMenu 加 ORDER BY position ASC，默认项排定顺序并加入 SwitchKeyboard 置于最左；库升至版本 7，迁移为老库补齐顺序并 INSERT OR IGNORE 该项"
+        },
+        {
+          "item": "键盘高度默认值",
+          "fix": "keyboardHeightRatio 0.27 → 0.28"
+        },
+        {
+          "item": "剪贴板历史上限",
+          "fix": "上限 110 → 1000 条，默认 50 → 400 条"
+        }
+      ],
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/FullDisplayKeyboardBar.kt",
+          "notes": "压缩上下内边距"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/database/dao/SkbFunDao.kt",
+          "notes": "顶栏菜单按 position 排序"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/database/DataBaseKT.kt",
+          "notes": "默认项排序并加入切换键盘；新增 MIGRATION_6_7"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/AppPrefs.kt",
+          "notes": "键盘高度与剪贴板上限默认值"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过，产物 67.36MB；真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "eb18c4e"
+      },
+      "lessons": [
+        "minimumHeight 只设下限，控件实际高度仍由内容与内边距决定。想让一个区域变矮，改最小高度往往毫无效果，必须找到真正撑开它的那部分",
+        "依赖数据库返回顺序的列表迟早会出问题：顶栏菜单原先没有 ORDER BY，位置全凭巧合，要指定顺序就必须先引入显式排序字段"
+      ]
+    },
+    {
       "id": "20260805-02",
       "date": "2026-08-05",
       "type": "feat",
