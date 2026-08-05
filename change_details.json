@@ -3,6 +3,28 @@
   "updatedAt": "2026-08-05",
   "entries": [
     {
+      "id": "20260805-04",
+      "date": "2026-08-05",
+      "type": "fix",
+      "title": "修复手写自动上屏后点符号出现重复字，版本升至 2.5.2",
+      "trigger": "用户反馈手写写完自动上屏后，点击旁边的符号会再上一个候选词再接符号，出现重复字",
+      "rootCause": "手写自动上屏后为便于查看而刻意保留了候选列表，但 InputView 中五处「有候选待确认时先上屏首选再输入」的逻辑并不知道该候选已经上过屏，点符号时又执行一次 chooseAndUpdate()，同一个字因此上屏两次",
+      "solution": "新增 handwritingAutoCommitted 标记，将散落在 responseLongKeyEvent、responseKeyEvent 的符号分支、processUserDefKey、processInput 的按键与文本两分支共五处的候选确认收敛为 commitPendingCandidate()：已自动上屏时只清空候选，否则维持原有先上屏行为。新的识别结果到来即视为新一轮书写，标记作废",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "新增 handwritingAutoCommitted 与 commitPendingCandidate，替换五处 chooseAndUpdate 调用"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过；真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "4cd41e6"
+      },
+      "lessons": [
+        "改变一处的既有约定（此处是「候选存在即表示尚未上屏」）时，必须排查所有依赖该约定的地方。手写为查看方便而保留候选，就打破了这一隐含前提，导致五处调用点全部误判"
+      ]
+    },
+    {
       "id": "20260805-03",
       "date": "2026-08-05",
       "type": "feat",
