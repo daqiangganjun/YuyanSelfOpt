@@ -1,7 +1,33 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-04",
+  "updatedAt": "2026-08-05",
   "entries": [
+    {
+      "id": "20260805-01",
+      "date": "2026-08-05",
+      "type": "fix",
+      "title": "修复空格滑动移光标导致失焦与键盘收起，版本升至 2.3.3",
+      "trigger": "用户反馈空格滑动调整光标时，有些程序滑到左边光标消失，有些程序滑到左边再滑回右边键盘直接收回",
+      "rootCause": "空格滑动移光标是经 BaseKeyboardView.dispatchGestureEvent 发出 SoftKey(DPAD_LEFT/RIGHT)，最终由 InputView.sendKeyEvent 调 sendCombinationKeyEvents 向应用下发真实按键事件。当光标已在文本首端或末端，越界的方向键会被应用按焦点导航处理，焦点跳到相邻可聚焦控件致输入框失焦（光标消失），若新焦点不接受输入则系统收起键盘。是否发生取决于该应用布局中有无相邻可聚焦控件，故表现为因应用而异",
+      "solution": "在 sendKeyEvent 下发左右方向键前，用 getTextBeforeCursor/getTextAfterCursor 判断是否已达边界，是则不下发。选择模式（扩展选区）与上下方向键不拦截；读取上下文失败时一律放行，避免密码框等场景误判卡住光标。ImeService 补充 getTextAfterCursor",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "sendKeyEvent 方向键分支增加边界判断；新增 isCursorAtEdge"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
+          "notes": "新增 getTextAfterCursor"
+        }
+      ],
+      "verification": "assembleOfflineDebug 构建通过；真机回归由用户执行",
+      "commits": {
+        "yuyansdk": "2d93ee0"
+      },
+      "lessons": [
+        "输入法通过 sendKeyEvent 下发方向键只是「模拟按键」，其语义由应用解释：文本内移动光标与跨控件焦点导航共用同一按键，越界时会从前者变成后者。涉及光标移动应优先考虑 setSelection，或至少在边界处停止下发"
+      ]
+    },
     {
       "id": "20260804-05",
       "date": "2026-08-04",

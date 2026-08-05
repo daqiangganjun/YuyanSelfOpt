@@ -16,7 +16,7 @@ buildscript {
 ext {
     versionMajor = 2
     versionMinor = 3
-    versionPatch = 2
+    versionPatch = 3
     appVersionName = "$versionMajor.$versionMinor.$versionPatch"
     appVersionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
 }
