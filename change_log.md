@@ -4,15 +4,18 @@
 
 ## 2026-08-05
 
-### `20260805-03` feat：顶栏加入切换键盘与压缩全面屏底栏，版本升至 2.5.0
+### `20260805-03` feat：顶栏加入切换键盘、底栏高度可控与默认值调整，版本升至 2.5.0
 
 上一版调小 `heightForFullDisplayBar` 无效——它只作用于 `minimumHeight`，底栏实际高度由自身内边距
 与图标撑开，现直接收紧内边距。顶栏默认加入「切换键盘」并置于最左；因菜单列表为 reverseLayout 且
 原先没有排序，一并加上 `ORDER BY position`，库升至版本 7 为老库补齐。键盘高度 0.28、剪贴板默认 400
 条上限 1000 条。
 
-- 提交：主仓库见本次记录，yuyansdk `eb18c4e`
-- 影响文件：`FullDisplayKeyboardBar.kt`、`SkbFunDao.kt`、`DataBaseKT.kt`、`AppPrefs.kt`
+底栏高度改为由配置单点控制（此前始终被内容撑开）并再减半；空格键恢复白底；修复模型状态查询的异步
+竞态——过期结果会把「下载中」冲掉，致进度圈凭空消失。
+
+- 提交：主仓库见本次记录，yuyansdk `eb18c4e`、`bb00665`
+- 影响文件：`FullDisplayKeyboardBar.kt`、`SkbFunDao.kt`、`DataBaseKT.kt`、`AppPrefs.kt`、`InputView.kt`、`TextKeyboard.kt`、`MlKitHandwritingModel.kt`
 
 ### `20260805-02` feat：手写模型提示常驻键盘与字号解耦，版本升至 2.4.0
 
