@@ -3,6 +3,35 @@
   "updatedAt": "2026-08-06",
   "entries": [
     {
+      "id": "20260806-04",
+      "date": "2026-08-06",
+      "type": "fix",
+      "title": "修复 release 包打开剪贴板崩溃，版本升至 3.0.1",
+      "trigger": "用户反馈 3.0.1 之前的 release 包打开剪贴板即崩溃",
+      "rootCause": "项目有两处反射访问 androidx 库的私有字段，字段名被 R8 混淆后失效。其一为 libs/recyclerview/AdapterWrapper：包装侧滑菜单时先把原 itemView addView 进外层容器，再反射把 ViewHolder.itemView 改指向该容器；反射失败被 catch (Exception ignored) 静默吞掉，itemView 便停留在『已有父视图』的状态，RecyclerView 在 createViewHolder 中检出后抛 IllegalStateException（ViewHolder views must not be attached when created）。崩溃点与真正的原因隔着一层被吞掉的异常，故堆栈只指向 BaseContainer.onMeasure。其二为 prefs/Functions.kt 反射读取 Preference.mDefaultValue 以实现『重置为默认值』，此处无异常保护，字段缺失会直接抛 NoSuchFieldException。两者在 debug 下均正常——debug 不混淆",
+      "solution": "在 yuyansdk/proguard.cfg 中保留这两个字段名，并注明升级 androidx 依赖时需复核字段是否仍存在。未改动反射代码本身：AdapterWrapper 属内置的第三方库实现，改为不依赖反射需重构其 ViewHolder 包装机制；Preference 亦未提供公开的默认值读取接口",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/proguard.cfg",
+          "notes": "新增 RecyclerView$ViewHolder.itemView 与 Preference.mDefaultValue 两条 keepclassmembers"
+        },
+        {
+          "path": "build.gradle",
+          "notes": "版本升至 3.0.1"
+        }
+      ],
+      "verification": "构建后核对 mapping.txt：Preference 类名与成员均未改名，ViewHolder 的 itemView 不在改名列表中；真机安装验证剪贴板与设置项重置",
+      "lessons": [
+        "凡反射访问第三方库的私有成员，都必须配套 keep 规则，否则只在 release 崩溃。可用 grep getDeclaredField/getDeclaredMethod/Class.forName 全项目排查一遍",
+        "catch (Exception ignored) 会把根因掩埋：此处反射失败本身不抛，崩溃改由 RecyclerView 在别处抛出，堆栈只指向 BaseContainer.onMeasure，与真正的问题相隔一层",
+        "debug 包不混淆，功能正常不代表 release 正常。首次发布 release 前应把依赖反射、序列化、资源反查的功能都回归一遍——剪贴板与设置重置正是这样漏掉的",
+        "混淆后的堆栈可用 app/build/outputs/mapping/offlineRelease/mapping.txt 反查：grep '-> 混淆名:' 即可得到原类名"
+      ],
+      "commits": {
+        "yuyansdk": "191560c"
+      }
+    },
+    {
       "id": "20260806-03",
       "date": "2026-08-06",
       "type": "feat",
@@ -931,7 +960,8 @@
       "libyuyanime.so 的 JNI_OnLoad 会 FindClass(kotlin/Pair)，混淆时必须 -keep class kotlin.Pair，否则 native 库加载即 SIGABRT",
       "com.google.android.datatransport:transport-backend-cct 不可从依赖中排除，ML Kit 初始化时会强制实例化 CCTDestination；遥测的阻断方式是在 manifest 中移除其调度组件",
       "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*",
-      "注音一律经 PolyphoneReading，禁止直接调用 PinyinHelper.toHanYuPinyinMulti——后者会输出古音与罕用音"
+      "注音一律经 PolyphoneReading，禁止直接调用 PinyinHelper.toHanYuPinyinMulti——后者会输出古音与罕用音",
+      "反射访问 androidx 私有字段（RecyclerView$ViewHolder.itemView、Preference.mDefaultValue）依赖 proguard.cfg 中的 keep 规则，升级依赖或新增此类反射时必须同步维护"
     ]
   }
 }

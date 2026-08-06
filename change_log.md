@@ -4,6 +4,16 @@
 
 ## 2026-08-06
 
+### `20260806-04` fix：修复 release 包打开剪贴板崩溃，版本升至 3.0.1
+
+项目有两处反射访问 androidx 私有字段，R8 混淆字段名后失效：`AdapterWrapper` 反射替换
+`ViewHolder.itemView`，失败被 catch 吞掉，RecyclerView 随即因 itemView 已有父视图而抛
+`IllegalStateException`；`Functions.kt` 反射读 `Preference.mDefaultValue` 则无保护会直接崩。
+已补 keep 规则。二者仅在 release 暴露，debug 不混淆故一直正常。
+
+- 提交：yuyansdk `191560c`
+- 影响文件：`yuyansdk/proguard.cfg`、`build.gradle`
+
 ### `20260806-03` feat：手写改用组合文本并补充读音气泡
 
 手写原先直接上屏、无法撤回，为此维护了两个补丁标志对抗联想覆盖与重复上屏。现改用 Android 标准的
