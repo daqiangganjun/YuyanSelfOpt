@@ -3,6 +3,51 @@
   "updatedAt": "2026-08-06",
   "entries": [
     {
+      "id": "20260806-03",
+      "date": "2026-08-06",
+      "type": "feat",
+      "title": "手写改用组合文本并补充读音气泡",
+      "trigger": "用户指出主流输入法手写时结果带下划线待确认，不点候选则在下次输入或退出时转正，点候选可替换并转入联想，且有反查读音显示；询问本键盘能否实现",
+      "rootCause": "手写结果原先经 commitText 直接上屏，无从撤回。由此派生两处补丁：suppressAssociateOnce 用于挡住『上屏触发 onUpdateSelection 查联想覆盖候选』，handwritingAutoCommitted 用于避免五处调用点重复上屏。二者都是错误机制的衍生物——Android 对未确定输入的标准处理是组合文本（setComposingText）",
+      "solution": "以 handwritingComposing 记录组合中的文本：停笔即置为组合态（带下划线、候选保留），选定候选则替换并当即落定、随后主动查联想接管候选栏，退格整字撤销，写新字或输入其它内容时自动落定。onUpdateSelection 改按组合态判断而非一次性标志，两个补丁标志删除。读音另建《现代常用多音字表》查表：表内字列出全部现代读音，表外字回落 pinyin4j 首选音",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "新增 handwritingComposing/handwritingReading 与 setHandwritingComposing、finishHandwritingComposing、cancelHandwritingComposing、chooseHandwritingCandidate、confirmHandwritingBeforeNewChar、updateAssociateCandidates；删除 suppressAssociateOnce 与 handwritingAutoCommitted；空格/回车/退格三处补组合态分支"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/HandwritingKeyboard.kt",
+          "notes": "autoCommitted 更名 composed，新增 resetForNewChar 供选定候选后重置笔迹"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/HandwritingContainer.kt",
+          "notes": "新增 resetHandwriting 转发（mMajorView 为 protected，InputView 无法直接访问）"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
+          "notes": "onFinishInput 落定组合态；finishComposingText 补空安全"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/pinyin4j/PolyphoneReading.kt",
+          "notes": "新增。多音字表查询，by lazy 加载"
+        },
+        {
+          "path": "yuyansdk/src/main/assets/pinyindb/polyphone.txt",
+          "notes": "新增。2495 条现代常用多音字读音，36.9KB，源自 mapull/chinese-dictionary (MIT)"
+        }
+      ],
+      "verification": "assembleOfflineRelease 构建通过并真机验证：组合态下划线、选定候选转联想、退格撤销、连写落定、读音显示（吃→chī、哈→hā,hǎ,hà）均正常；拼音与九键的空格选词、回车、退格等公共通道未受影响",
+      "lessons": [
+        "为绕开某个机制而反复加标志位时，应回头检查机制本身是否选错。此处两个补丁标志都源于用 commitText 处理未确定输入，改用 setComposingText 后一并消失",
+        "finishComposingText 不改变文本内容与光标位置，未必触发 onUpdateSelection，落定后若需刷新联想必须主动调用，不能依赖该回调",
+        "候选栏的内容会在识别结果与联想词之间切换，凡是取『首个候选』的地方都必须先判 isAssociate。识别为跨进程异步，停笔定时到点时结果可能尚未返回，此时候选栏仍是联想词",
+        "pinyin4j 收录的是字书级别的全部异读（含古音、罕用音），用于注音会引入噪音（「吃」给出古音 qī）。TinyPinyin 的做法是只取其第一个读音；若需多音则应另用现代常用多音字表"
+      ],
+      "commits": {
+        "yuyansdk": "4361c96"
+      }
+    },
+    {
       "id": "20260806-02",
       "date": "2026-08-06",
       "type": "chore",
@@ -790,7 +835,7 @@
       "androidSdk": "%LOCALAPPDATA%\\Android\\Sdk，含 platforms android-35/36、build-tools 34.0.0（手动装）与 36.0.0",
       "ndk": "不需要。yuyansdk/libs 下为预编译 .so，build.gradle 中的 abiFilters 仅作过滤",
       "network": {
-        "proxy": "socks5://127.0.0.1:10808，curl 与 git 可用，Java/Gradle 不可用（仅监听 IPv6）",
+        "proxy": "http://127.0.0.1:10808，仅接受 HTTP 代理协议（socks5 不可用，实测连接失败）。curl 与 git 可用，Java/Gradle 不可用",
         "maven": "使用阿里云镜像，见 build_mirror.init.gradle",
         "blocked": "github.com 与 dl.google.com 的 HTTPS 直连不可用；但 github.com:22 的 SSH 直连可达，故 git push 无需代理"
       },
@@ -808,7 +853,8 @@
       ],
       "releaseBuildCommand": "gradlew.bat assembleOfflineRelease --init-script build_mirror.init.gradle；产物在 app/build/outputs/apk/offline/release/，签名取自 keystore/，与 debug 同一份（包名后缀 .release 与 .debug 可共存）",
       "concurrency": "gradle.properties 限制并发为逻辑核心的 2/3：org.gradle.workers.max 与 kotlin.daemon.jvmargs 的 -XX:ActiveProcessorCount 需分别设置。换机器需按 floor(cores*2/3) 重算",
-      "githubCli": "gh CLI 未安装；HTTPS 直连 GitHub 不可用，如需调用 GitHub API 须经 socks5://127.0.0.1:10808 且自备 token。git 走 SSH 无需代理"
+      "githubCli": "gh 2.97.0 位于 D:/Path/gh/bin/gh.exe（已入用户 PATH），账号 daqiangganjun，scopes 含 repo。调用时须带 HTTPS_PROXY=http://127.0.0.1:10808；非交互会话不加载 PowerShell profile，且环境变量不跨调用保留，必须与 gh 命令写在同一条语句内",
+      "release": "tag 统一加 selfopt- 前缀（如 selfopt-v3.0.0），与仓库中继承自上游的 v4.x 标签区分"
     },
     "codeMap": [
       {
@@ -819,7 +865,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
         "role": "软键盘主视图，承载候选栏、键盘容器与弹窗，同时是按键事件的业务处理入口",
-        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存"
+        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存 手写走组合文本：handwritingComposing 非空表示输入框中有未落定的字，此时 chooseAndUpdate、空格、回车、退格、onUpdateSelection 均有专门分支。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
@@ -870,6 +916,11 @@
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/HandwritingModelTipView.kt",
         "role": "手写区域的模型状态提示与下载入口",
         "notes": "init 中必须为 GONE：挂载后首次 render 前会先绘制一帧。Unknown 与 Downloaded 一同隐藏"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/pinyin4j/PolyphoneReading.kt",
+        "role": "手写反查注音，按《现代常用多音字表》给出读音",
+        "notes": "不用 pinyin4j 的多音输出——那是字书级全部异读，含古音。表内字列全部现代读音，表外字回落 pinyin4j 首选音。表以 by lazy 加载，不用手写则不解析"
       }
     ],
     "constraints": [
@@ -879,7 +930,8 @@
       "yuyansdk 为独立 git 子模块（remote: git@github.com:daqiangganjun/yuyansdk.git），其内改动需在子模块内单独提交，再在主仓库提交指针更新",
       "libyuyanime.so 的 JNI_OnLoad 会 FindClass(kotlin/Pair)，混淆时必须 -keep class kotlin.Pair，否则 native 库加载即 SIGABRT",
       "com.google.android.datatransport:transport-backend-cct 不可从依赖中排除，ML Kit 初始化时会强制实例化 CCTDestination；遥测的阻断方式是在 manifest 中移除其调度组件",
-      "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*"
+      "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*",
+      "注音一律经 PolyphoneReading，禁止直接调用 PinyinHelper.toHanYuPinyinMulti——后者会输出古音与罕用音"
     ]
   }
 }

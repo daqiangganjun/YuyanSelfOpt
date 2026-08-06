@@ -4,6 +4,16 @@
 
 ## 2026-08-06
 
+### `20260806-03` feat：手写改用组合文本并补充读音气泡
+
+手写原先直接上屏、无法撤回，为此维护了两个补丁标志对抗联想覆盖与重复上屏。现改用 Android 标准的
+`setComposingText`：识别结果带下划线待定，选定候选即落定并转入联想，退格可整字撤销，两个标志一并删除。
+读音改以《现代常用多音字表》为准，避免 pinyin4j 的古音混入（「吃」不再出现 qī）。
+
+- 提交：yuyansdk `4361c96`
+- 影响文件：`InputView.kt`、`HandwritingKeyboard.kt`、`HandwritingContainer.kt`、`ImeService.kt`、
+  新增 `PolyphoneReading.kt` 与 `assets/pinyindb/polyphone.txt`
+
 ### `20260806-02` chore：限制构建并发度为逻辑核心数的 2/3
 
 构建占满 CPU 影响日常使用。`org.gradle.workers.max` 与 Kotlin daemon 的 `ActiveProcessorCount`
