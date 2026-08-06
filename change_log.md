@@ -2,6 +2,26 @@
 
 本文件为变更的简要索引，按时间倒序排列。每条记录的完整明细（根因分析、涉及文件、验证方式、可复用知识）见 `change_details.json` 中对应 `id` 的条目。
 
+## 2026-08-06
+
+### `20260806-02` chore：限制构建并发度为逻辑核心数的 2/3
+
+构建占满 CPU 影响日常使用。`org.gradle.workers.max` 与 Kotlin daemon 的 `ActiveProcessorCount`
+须分别设置——后者不受 Gradle worker 数约束，会自行按核心数开线程池。本机 8 核取 5。
+
+- 影响文件：`gradle.properties`
+
+### `20260806-01` refactor：手写识别隔离至 :hw 进程并阻断遥测上传，版本升至 3.0.0
+
+ML Kit 在进程启动时无条件初始化，连带 GMS dynamite、WorkManager 与 Google 遥测常驻输入法主进程，
+即便从不使用手写。现将其全部收拢到独立的 `:hw` 进程，切离手写键盘即解绑并终止该进程；同时移除
+遥测的两个调度组件，使事件无法上传。主进程 `Other mmap` 与 `Unknown` 合计减少约 42MB。
+
+- 提交：yuyansdk `bb89e97`
+- 影响文件：`handwriting/`（新增三文件）、`HandwritingKeyboard.kt`、`KeyboardManager.kt`、
+  `HandwritingModelTipView.kt`、`HandwritingSettingsFragment.kt`、两处 `AndroidManifest.xml`、
+  `proguard.cfg`、`build.gradle`
+
 ## 2026-08-05
 
 ### `20260805-04` fix：修复手写自动上屏后点符号出现重复字，版本升至 2.5.2

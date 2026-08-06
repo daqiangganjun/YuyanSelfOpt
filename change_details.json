@@ -1,7 +1,98 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-05",
+  "updatedAt": "2026-08-06",
   "entries": [
+    {
+      "id": "20260806-02",
+      "date": "2026-08-06",
+      "type": "chore",
+      "title": "限制构建并发度为逻辑核心数的 2/3",
+      "trigger": "用户反馈构建时 CPU 拉满影响日常使用",
+      "rootCause": "Gradle 默认以全部逻辑核心并行；Kotlin daemon 是独立 JVM 进程，不受 org.gradle.workers.max 约束，会自行按 availableProcessors 开线程池",
+      "solution": "gradle.properties 中同时设置 org.gradle.workers.max=5 与 kotlin.daemon.jvmargs 的 -XX:ActiveProcessorCount=5（本机 8 核，取 floor(8*2/3)）",
+      "changedFiles": [
+        {
+          "path": "gradle.properties",
+          "notes": "新增 workers.max 与 kotlin daemon 的 ActiveProcessorCount"
+        }
+      ],
+      "verification": "限核后增量构建耗时 1m52s 至 2m26s，未见变慢",
+      "lessons": [
+        "限制 Gradle 并发只设 org.gradle.workers.max 不够，Kotlin daemon 需另行通过 ActiveProcessorCount 约束"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260806-01",
+      "date": "2026-08-06",
+      "type": "refactor",
+      "title": "手写识别隔离至 :hw 进程并阻断遥测上传，版本升至 3.0.0",
+      "trigger": "用户反馈新版运行内存高于原版（300+MB vs 200+MB），排查中发现 ML Kit 连带引入了 Google 遥测；用户明确要求：至少禁止上传、手写按需加载且切走即释放、终极目标移除信息收集",
+      "rootCause": "ML Kit 通过 MlKitInitProvider 这一 ContentProvider 在进程启动时无条件初始化，连带拉起 GMS dynamite、WorkManager（模型下载框架 MDD 所需）与 datatransport 遥测框架，即便用户从不使用手写。这些一经加载便无法在同进程内卸载：类不会被卸载、dex/jar 映射常驻、native heap 的 free 也未必归还内核。实测 debug 包主进程因此多出 Other mmap 22MB、Unknown 19MB，并常驻 androidx.work.workdb 与 com.google.android.datatransport.events 两个 SQLite 库",
+      "solution": "三层处理。一、进程隔离：新增 HandwritingService（android:process=\":hw\"）承载全部 ML Kit 调用，主进程仅保留 HandwritingClient 代理，二者以 Messenger 传递平铺的笔迹点数组与候选文本；HandwritingKeyboard 改用自有 InkStrokes 采集笔迹，不再 import ML Kit 的 Ink，否则类加载会重新发生在主进程。KeyboardManager.switchKeyboard 按键盘类型引用计数绑定，切离手写即解绑，Service.onDestroy 主动 killProcess 使内存立即归还。二、manifest 移除 MlKitInitProvider、WorkManagerInitializer 及遥测的 JobInfoSchedulerService 与 AlarmManagerSchedulerBroadcastReceiver，前两者改由 :hw 进程手动 MlKit.initialize / WorkManager.initialize。三、模型状态缓存至 SharedPreferences 并令提示视图默认隐藏，消除切入手写时的提示框闪烁",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingProtocol.kt",
+          "notes": "新增。Messenger 消息码、状态枚举与 InkStrokes；笔迹以平铺数组加笔划边界索引装入 Bundle，无需自定义 Parcelable"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingService.kt",
+          "notes": "新增。:hw 进程服务，手动初始化 MlKit 与 WorkManager，onDestroy 中 killProcess"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingClient.kt",
+          "notes": "新增。主进程代理，引用计数绑定；Downloading 期间延后解绑以免中断下载；模型状态缓存于 SharedPreferences 作为下次初值"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/HandwritingKeyboard.kt",
+          "notes": "改用 InkStrokes 采集，拼音标注移至主进程完成；删除对 Ink 与 MlKitHandwriting* 的引用"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
+          "notes": "新增 syncHandwritingBinding，在 switchKeyboard 与 release 中绑定/解绑 :hw"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/HandwritingModelTipView.kt",
+          "notes": "改用 HandwritingClient；init 中设为 GONE，Unknown 状态不渲染，消除闪烁"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/HandwritingSettingsFragment.kt",
+          "notes": "改用 HandwritingClient，onResume/onPause 中 acquire/release"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/MlKitHandwritingEngine.kt",
+          "notes": "删除。识别逻辑并入 HandwritingService"
+        },
+        {
+          "path": "yuyansdk/src/main/AndroidManifest.xml",
+          "notes": "注册 HandwritingService 于 :hw 进程"
+        },
+        {
+          "path": "app/src/main/AndroidManifest.xml",
+          "notes": "移除 MlKitInitProvider、WorkManagerInitializer 与两个遥测调度组件"
+        },
+        {
+          "path": "yuyansdk/proguard.cfg",
+          "notes": "新增 -keep class kotlin.Pair，libyuyanime.so 的 JNI_OnLoad 需要它"
+        },
+        {
+          "path": "yuyansdk/build.gradle",
+          "notes": "显式声明 work-runtime 供 :hw 手动初始化使用"
+        }
+      ],
+      "verification": "assembleOfflineRelease 构建通过并真机安装；主进程 dumpsys meminfo 的 DATABASES 段仅剩 ime_db，workdb 与 datatransport.events 均消失；Other mmap 由 30721 降至 8089、Unknown 由 20237 降至 952；切离手写键盘后 ps 中已无 :hw 进程；手写识别、模型下载与删除功能均正常",
+      "lessons": [
+        "transport-backend-cct（Google 遥测的上传实现）不可用 gradle exclude 移除：ML Kit 的依赖注入图在初始化时即强制实例化 CCTDestination，缺类会抛 NoClassDefFoundError 而非走降级路径。改为保留依赖、在 manifest 中移除调度组件，使其有代码而无法上传",
+        "libyuyanime.so 的 JNI_OnLoad 除 com.yuyan.inputmethod.core 各类外还会 FindClass(kotlin/Pair)，R8 会将 Java 侧无引用的 kotlin.Pair 整类移除，导致 native 库一加载即 SIGABRT。该类清单可由 .so 中的字符串常量确定",
+        "RSS 不适合衡量应用内存：它把跨进程共享页在每个进程重复计一次，又不含已换出到 zram 的部分。应比较 PSS + SwapPss。release 包因 AOT 使代码成为共享只读页，RSS 反而高于 debug，但真实工作集更低且几乎不产生 swap",
+        "比较内存必须状态对等。输入法键盘显示与否会带来 40MB 以上的 GL mtrack 差异，且该项随会话历史波动很大（同一包先后测得 53MB 与 31MB），不宜作为版本优劣的判据",
+        "自定义 View 挂载后、首次状态回调前会先按默认 visibility 绘制一帧。凡是按状态决定是否显示的视图，都应在 init 中显式设为 GONE",
+        "跨进程隔离第三方 SDK 时，主进程必须彻底不引用其任何类型。HandwritingKeyboard 原先直接使用 ML Kit 的 Ink 采集笔迹，仅此一处即可让整个 SDK 加载回主进程"
+      ],
+      "commits": {
+        "yuyansdk": "bb89e97"
+      }
+    },
     {
       "id": "20260805-04",
       "date": "2026-08-05",
@@ -714,7 +805,10 @@
       "knownWarnings": [
         "AGP 8.3.2 官方仅测试至 compileSdk 34，本项目用 36，仅警告不影响构建",
         "SDK XML version 4 与命令行工具版本不匹配的警告可忽略"
-      ]
+      ],
+      "releaseBuildCommand": "gradlew.bat assembleOfflineRelease --init-script build_mirror.init.gradle；产物在 app/build/outputs/apk/offline/release/，签名取自 keystore/，与 debug 同一份（包名后缀 .release 与 .debug 可共存）",
+      "concurrency": "gradle.properties 限制并发为逻辑核心的 2/3：org.gradle.workers.max 与 kotlin.daemon.jvmargs 的 -XX:ActiveProcessorCount 需分别设置。换机器需按 floor(cores*2/3) 重算",
+      "githubCli": "gh CLI 未安装；HTTPS 直连 GitHub 不可用，如需调用 GitHub API 须经 socks5://127.0.0.1:10808 且自备 token。git 走 SSH 无需代理"
     },
     "codeMap": [
       {
@@ -729,8 +823,8 @@
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
-        "role": "键盘容器的创建与切换管理，单例",
-        "notes": "按 KeyboardType 分发到 T9TextContainer / QwertyContainer / HandwritingContainer / ClipBoardContainer / SymbolContainer / SettingsContainer / CandidatesContainer。自身也持有 lateinit mInputView，但已有 isInitialized 防护"
+        "role": "键盘容器的创建、缓存与切换",
+        "notes": "switchKeyboard 是唯一切换入口，:hw 进程的绑定与解绑挂钩于此；release() 中需一并解绑"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/FullDisplayKeyboardBar.kt",
@@ -756,13 +850,36 @@
         "path": "build_mirror.init.gradle",
         "role": "本机构建加速与兼容脚本（非上游文件）",
         "notes": "重定向 Maven 仓库至阿里云镜像，并将 KotlinCompile / KspTask 的 jvmTarget 统一为 17。通过 --init-script 传入，不侵入项目构建脚本"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingProtocol.kt",
+        "role": "主进程与 :hw 进程的 Messenger 协议、状态枚举与笔迹容器 InkStrokes",
+        "notes": "协议只传原始数值。主进程一旦引用 ML Kit 类型，进程隔离即失效"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingService.kt",
+        "role": ":hw 进程服务，承载全部 ML Kit 调用",
+        "notes": "onCreate 手动初始化 MlKit 与 WorkManager（自动初始化已在 manifest 移除）；onDestroy 中 killProcess，否则解绑后只是变成空进程滞留 LRU，内存不归还"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingClient.kt",
+        "role": "主进程侧代理，引用计数绑定 :hw",
+        "notes": "手写键盘与手写设置页均可持有；Downloading 期间延后解绑以免中断下载；模型状态缓存于 SharedPreferences，避免绑定完成前提示框闪烁"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/HandwritingModelTipView.kt",
+        "role": "手写区域的模型状态提示与下载入口",
+        "notes": "init 中必须为 GONE：挂载后首次 render 前会先绘制一帧。Unknown 与 Downloaded 一同隐藏"
       }
     ],
     "constraints": [
       "版本号唯一来源为根 build.gradle 的 ext 块（versionMajor/versionMinor/versionPatch），禁止在其他文件硬编码版本号；递增规则见 CLAUDE.md「版本号规范」",
       "com.yuyan.inputmethod.core 包内的类名、包名、字段名与预编译 .so 的 JNI 符号硬绑定，严禁重命名或移动",
       "提交信息不得包含任何 AI 工具署名，提交身份统一为 daqiangganjun",
-      "yuyansdk 为独立 git 子模块（remote: git@github.com:daqiangganjun/yuyansdk.git），其内改动需在子模块内单独提交，再在主仓库提交指针更新"
+      "yuyansdk 为独立 git 子模块（remote: git@github.com:daqiangganjun/yuyansdk.git），其内改动需在子模块内单独提交，再在主仓库提交指针更新",
+      "libyuyanime.so 的 JNI_OnLoad 会 FindClass(kotlin/Pair)，混淆时必须 -keep class kotlin.Pair，否则 native 库加载即 SIGABRT",
+      "com.google.android.datatransport:transport-backend-cct 不可从依赖中排除，ML Kit 初始化时会强制实例化 CCTDestination；遥测的阻断方式是在 manifest 中移除其调度组件",
+      "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*"
     ]
   }
 }

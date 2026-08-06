@@ -26,10 +26,40 @@
              EmojiCompat.get()，缺失时构造即抛 IllegalStateException。
              ProcessLifecycleInitializer 是 EmojiCompatInitializer 声明的依赖，同样不可移除。 -->
 
-        <!-- 单进程应用，未启用 Room 多实例失效通知 -->
+        <!-- 输入法主进程未启用 Room 多实例失效通知；手写进程不访问业务库 -->
         <service
             android:name="androidx.room.MultiInstanceInvalidationService"
             tools:node="remove" />
+
+        <!-- 以下四项均为 ML Kit 拖入的组件，默认在进程启动时无条件加载。
+             手写识别已隔离至 :hw 进程（见 HandwritingService），主进程不应为此付出代价。 -->
+
+        <!-- 遥测调度器。上传实现 transport-backend-cct 已在 yuyansdk/build.gradle 中排除，
+             此处再移除调度组件，避免 JobScheduler 周期性唤醒进程去尝试一个不存在的后端。 -->
+        <service
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+            tools:node="remove" />
+        <receiver
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+            tools:node="remove" />
+
+        <!-- ML Kit 的自动初始化 ContentProvider。官方支持移除后手动调用 MlKit.initialize()，
+             本项目改由 HandwritingService 在 :hw 进程内按需初始化。 -->
+        <provider
+            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+            android:authorities="${applicationId}.mlkitinitprovider"
+            tools:node="remove" />
+
+        <!-- WorkManager 仅被 ML Kit 的模型下载框架使用，却会在每个进程启动时建库并跑
+             ForceStopRunnable。改为按需初始化，仅 :hw 进程调用 WorkManager.initialize()。 -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>
