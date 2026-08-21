@@ -1,7 +1,158 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-21",
   "entries": [
+    {
+      "id": "20260821-05",
+      "date": "2026-08-21",
+      "type": "fix",
+      "title": "剪贴板与按键附带符号字号调整，版本升至 4.1.0",
+      "trigger": "用户反馈剪贴板与常用语字体过大；按键上灰色附带符号偏大，且键盘调矮时会顶出按键",
+      "rootCause": "剪贴板与常用语共用 ClipBoardAdapter，字号直接取 candidateTextSize——那是按候选栏高度换算的，为单字短词好点而定，用在整段文本上自然过大。附带符号则是另一种失配：字号取自与键高解耦的 keyTextSmallSize（固定值），落点却是 softKey.height()/4*1.1（键高比例）。键盘调矮后按键变扁，落点绝对值随之上移而字号不变，就会顶到按键上沿",
+      "solution": "剪贴板另立 clipboardTextSize，取候选词字号的 0.7 倍，仍跟随候选字号设置一起缩放，不新增设置项。附带符号基准系数由 0.04 收至 0.035，并补两道与键高挂钩的约束：字号不超过键高的 0.22，基线不高于「按键上沿加一个字高（取自 fontMetrics.ascent）加间距」。正常键高下两道约束都不触发，只有键盘调得很矮时才接管",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/singleton/EnvironmentSingleton.kt",
+          "notes": "新增 clipboardTextSize 与 CLIPBOARD_TEXT_SIZE_RATIO；keyTextSmallSize 系数 0.04 改 0.035"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/ClipBoardAdapter.kt",
+          "notes": "条目字号改用 clipboardTextSize"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/TextKeyboard.kt",
+          "notes": "附带符号按键高压字号上限并抬高基线下限，新增两个比例常量"
+        }
+      ],
+      "verification": "assembleOfflineRelease 构建通过并真机安装；正常键高与最矮键高各看一次",
+      "lessons": [
+        "同一处文字的字号与位置若一个取固定值、另一个取容器比例，容器一变两者就会失配。要么都固定，要么都跟随，否则必须补一道相互约束",
+        "判断文字是否越界应取 Paint.fontMetrics 实测，而非按字号乘经验系数估算"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260821-04",
+      "date": "2026-08-21",
+      "type": "fix",
+      "title": "上划清除删不尽",
+      "trigger": "用户反馈上划删除光标前所有内容的功能有时不生效",
+      "rootCause": "只取一次 getTextBeforeCursor(1000) 就删，光标前超过 1000 字符时一次删不完，剩下的看着就像没生效；且 deleteSurroundingText 的长度写死为 1000，与实际取到的长度未必相符",
+      "solution": "分批删到取不出内容为止（每批 1000，最多 30 批），每批按实际取到的长度删除，并逐批压入回退栈，撤销时逆序恢复",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "新增 clearTextBeforeCursor 与两个批次常量，替换 PopupMenuMode.Clear 分支中的单次删除"
+        }
+      ],
+      "verification": "真机在长文本输入框中回归",
+      "commits": {}
+    },
+    {
+      "id": "20260821-03",
+      "date": "2026-08-21",
+      "type": "fix",
+      "title": "修复符号栏刷新时崩溃",
+      "trigger": "用户反馈点击数字键盘的 . 与 @ 会崩溃",
+      "rootCause": "ClassCastException: android.widget.LinearLayout$LayoutParams cannot be cast to androidx.recyclerview.widget.RecyclerView$LayoutParams。20260820-01 为把「符号设置」撑到与符号等高，在 footer 已被 RecyclerView 接管之后替换了它的 layoutParams，换成了 LinearLayout.LayoutParams；而 RecyclerView 会把 itemView 的 layoutParams 直接强转成自己的类型，于是下一次 setAdapter 即崩。触发点是任何一次刷新符号栏的 onUpdateSelection——上屏字符、移动光标都会走到，点 . 和 @ 只是恰好命中。缺陷随 4.0.0 一同发布",
+      "solution": "不再替换 layoutParams 的类型：只改现有对象的 height，仅在其为空时新建，且新建的是 RecyclerView.LayoutParams；createSettingsEntry 初始也改用 RecyclerView.LayoutParams。minimumHeight 保留——它在测量阶段生效，不经过 layoutParams 这一层，footer 复用时高度也能跟上",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SideSymbolBar.kt",
+          "notes": "applyFooterHeight 改为原地改高度；createSettingsEntry 的 layoutParams 改用 RecyclerView.LayoutParams"
+        }
+      ],
+      "verification": "adb logcat -b crash 确认原崩溃栈；修复后清空崩溃缓冲重装回归",
+      "lessons": [
+        "RecyclerView 会把 itemView 的 layoutParams 强转成 RecyclerView.LayoutParams。view 加入之前设别的类型没问题（addView 时会经 generateLayoutParams 转换），但在它接管之后替换类型必崩。需要改尺寸时只改现有对象的字段，不要整个替换",
+        "崩溃栈里被混淆的调用点（如 or1.r、bg0.r）可先看未混淆的两端——RecyclerView.setAdapter 与 ImeService.onUpdateSelection 已足以定位到刷新符号栏这条路径",
+        "adb logcat -b crash -d 能直接取到设备的崩溃缓冲，比让用户导出崩溃日志快得多"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260821-02",
+      "date": "2026-08-21",
+      "type": "feat",
+      "title": "文本编辑键盘增加剪切并修正光标与全选行为",
+      "trigger": "用户要求加剪切按钮，并反馈：全选有时要点两次、移到行末会闪一下全选、移到行首时长文本视角不跟随、粘贴后紧接全选会收起键盘、全选后按上键与按左键结果不一致",
+      "rootCause": "全选原是开关式（hasSelectionAll 取反），该状态与实际选区不同步时第一次点击反而走「取消选择」分支，于是要按两次。行末原实现字面上就是「先 performContextMenuAction(selectAll) 再发一个右方向键」，那道闪光就是真的全选高亮。行首用 InputConnection.setSelection(0,0)，它只改选区、不保证宿主把光标滚进可视区。粘贴与全选都走 performContextMenuAction，会惊动宿主的选择态流程，连着触发时部分应用会重建输入区导致失焦。上下键在单行输入框里无处可去，会被当作焦点导航",
+      "solution": "末行由三等分改为四列，与上方三行对齐后放入剪切键。全选改为每次直接执行，并优先 setSelection(0, 全文长度)（长度由 getExtractedText 取得，取不到才回落到菜单动作）。行首行末改发标准的 MOVE_HOME/MOVE_END 按键，走宿主的按键处理路径，既无闪烁又会 bringPointIntoView。方向键在有选区时先折叠选区：上、左归选区首，下、右归选区尾",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "新增 selectAllText；MOVE_START/MOVE_END 改发按键；方向键分支加选区折叠"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
+          "notes": "新增 getAllTextLength，经 getExtractedText 取全文长度"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardData.kt",
+          "notes": "文本编辑布局末行加入 USER_KEYCODE_CUT"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyPreset.kt",
+          "notes": "补剪切键标签"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/utils/KeyboardLoaderUtil.kt",
+          "notes": "末行改用默认键宽，四列对齐"
+        }
+      ],
+      "verification": "真机逐项回归，用户确认全部正常",
+      "lessons": [
+        "「移到行首/行末」应发 MOVE_HOME/MOVE_END 按键而非 setSelection：按键走宿主 TextView 的正常处理，会把光标滚进可视区；setSelection 只改选区，长文本下光标可能停在看不见的地方",
+        "performContextMenuAction 会触发宿主自身的选择态流程，连续调用（如粘贴紧接全选）在部分应用上会导致输入框失焦、键盘收起。能用 InputConnection 直接完成的操作就不要走它",
+        "把「执行某操作」写成开关式（取反后按状态分支）需要状态与外部实际情况始终同步，做不到就会出现「要点两次」这类现象。全选这类幂等操作直接每次执行即可"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260821-01",
+      "date": "2026-08-21",
+      "type": "refactor",
+      "title": "模糊音独立成页，侧符号栏排布统一",
+      "trigger": "用户要求模糊音设置改为进入子页面；并反馈数字键盘侧符号栏的齿轮偏大、其下无空隙，与其它符号间距不一致；手写的符号栏仍是旧效果",
+      "rootCause": "模糊音十余条规则加自定义项平铺在输入设置里，会把其它设置项淹没。侧符号栏的问题出在均分逻辑写成了二选一——均分高度低于 36dp 就整体退回内容自适应；用户由两个符号增至三个后，每项由约 48dp 降到 35.7dp，恰好越过阈值，于是符号按内容撑开而「符号设置」只有图标那么高，末尾那格明显塌陷。手写的符号栏在 HandwritingContainer 中另有一份代码，20260820-01 只改了九宫格与候选界面两处",
+      "solution": "模糊音移入独立的 FuzzyPinyin 分类与子页面，输入设置底部留一个入口项。符号栏改为始终均分、但不低于可点下限（28dp），项数多到均分已不足以点按时改用下限并滚动，不再有整体翻转的阈值。三处符号栏的排布规则抽入 SideSymbolBar 共用，齿轮图标由固有的 35dp 显式收窄至 18dp",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SideSymbolBar.kt",
+          "notes": "新增。均分高度计算、「符号设置」项的构建与高度施加，三处符号栏共用"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/FuzzyPinyinFragment.kt",
+          "notes": "新增。模糊音子页面"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/AppPrefs.kt",
+          "notes": "模糊音由 Input 移入独立的 FuzzyPinyin 分类"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/InputSettingsFragment.kt",
+          "notes": "onPreferenceUiCreated 中加入模糊音入口"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/HandwritingContainer.kt",
+          "notes": "改用 SideSymbolBar，此前一直沿用旧排布"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/T9TextContainer.kt",
+          "notes": "改用 SideSymbolBar"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/CandidatesContainer.kt",
+          "notes": "改用 SideSymbolBar"
+        }
+      ],
+      "verification": "真机确认三处符号栏排布一致；模糊音子页面可进入且规则齐全",
+      "lessons": [
+        "按阈值在两套布局策略间二选一，会在阈值附近随数据量翻转，表现难以预料且不易复现。改成「取值再夹一个下限」这类连续的处理，行为才可预期",
+        "同一功能在多个容器里各有一份实现时，改动必须逐一排查。此处符号栏共三处，前一次只改了两处，遗漏的手写直到用户反馈才发现——抽出共用实现才是根治"
+      ],
+      "commits": {}
+    },
     {
       "id": "20260820-04",
       "date": "2026-08-20",
@@ -1097,7 +1248,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/T9TextContainer.kt",
         "role": "九宫格与数字键盘容器，含左侧符号/候选拼音栏",
-        "notes": "左侧栏是一个 SwipeRecyclerView，高度取自占位键 USER_KEYCODE_LEFT_SYMBOL 的区域；无候选拼音时显示侧符号并追加「符号设置」footer。各项高度按项数均分铺满栏高（evenItemHeight），均分高度低于 36dp 时退回自适应并滚动"
+        "notes": "左侧栏是一个 SwipeRecyclerView，高度取自占位键 USER_KEYCODE_LEFT_SYMBOL 的区域；无候选拼音时显示侧符号并追加「符号设置」footer。排布规则见 SideSymbolBar，九宫格、候选界面、手写三处共用"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SideSymbolBar.kt",
+        "role": "侧边符号栏的共用排布规则，九宫格、候选界面、手写三处共用",
+        "notes": "evenItemHeight 始终返回均分高度且不低于可点下限，不做「均分与自适应」的二选一——按阈值翻转会在符号增删时突变。applyFooterHeight 只改现有 layoutParams 的 height，绝不替换其类型：RecyclerView 会把 itemView 的 layoutParams 强转成 RecyclerView.LayoutParams，在它接管之后换类型会在 setAdapter 时抛 ClassCastException"
       }
     ],
     "constraints": [
@@ -1113,7 +1269,9 @@
       "Rime 方案的 speller/algebra 在设备上无法更改：assets/rime 下只有编译产物，方案 yaml 以 compiled_config 形式内嵌于 libyuyanime.so，没有源文件可供 deploy 重建 prism。模糊音一类需改 algebra 的能力只能在输入串层面另行实现",
       "候选列表为空等同于本轮输入结束，任何对候选的过滤都必须保证不把列表滤空",
       "改动 showCandidates 的组成（增删、重排、并入其它来源）时必须同步维护 RimeEngine 中的 rimeIndexMap/fuzzySourceMap，否则选词会取到错误的引擎下标",
-      "拼音编辑不得移动引擎自身的插入点：librime 只翻译插入点之前的编码，挪到中间会让候选只剩前半段。插入点记在 RimeEngine.editCaret，编辑后整串同步给引擎"
+      "拼音编辑不得移动引擎自身的插入点：librime 只翻译插入点之前的编码，挪到中间会让候选只剩前半段。插入点记在 RimeEngine.editCaret，编辑后整串同步给引擎",
+      "不得替换已交给 RecyclerView 管理的 itemView 的 layoutParams 类型（含 header/footer）：RecyclerView 会将其强转为 RecyclerView.LayoutParams，改尺寸只能原地改字段",
+      "「移到行首/行末」用 MOVE_HOME/MOVE_END 按键而非 setSelection，前者才会让宿主把光标滚进可视区；能用 InputConnection 完成的编辑操作不要走 performContextMenuAction，后者会惊动宿主选择态、连续调用可能导致失焦收起键盘"
     ]
   }
 }

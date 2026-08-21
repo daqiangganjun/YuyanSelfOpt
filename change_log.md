@@ -2,6 +2,50 @@
 
 本文件为变更的简要索引，按时间倒序排列。每条记录的完整明细（根因分析、涉及文件、验证方式、可复用知识）见 `change_details.json` 中对应 `id` 的条目。
 
+## 2026-08-21
+
+### `20260821-05` fix：字号调整，版本升至 4.1.0
+
+剪贴板与常用语沿用候选词字号（按候选栏高度换算，为单字短词好点而定），用在整段文本上过大，
+另立 `clipboardTextSize` 收至 0.7 倍。按键附带的灰色符号基准由 0.035 收小，并按键高压一道
+字号上限、基线不高于「上沿加一个字高」——它字号固定而落点是键高比例，键盘调矮会顶出按键。
+
+- 影响文件：`EnvironmentSingleton.kt`、`ClipBoardAdapter.kt`、`TextKeyboard.kt`
+
+### `20260821-04` fix：上划清除删不尽
+
+原实现只取一次 1000 字符，且删除长度写死为 1000 而非实际取到的长度，光标前更长时一次删不完，
+看着就像「有时不生效」。改为分批删到取不出内容为止，每批按实际长度删除并逐批压入回退栈。
+
+- 影响文件：`InputView.kt`
+
+### `20260821-03` fix：修复符号栏刷新时崩溃
+
+`ClassCastException: LinearLayout$LayoutParams cannot be cast to RecyclerView$LayoutParams`。
+为撑起「符号设置」那一格的高度，在 footer 已被 RecyclerView 接管后替换了它的 layoutParams 类型，
+而 RecyclerView 会将 itemView 的 layoutParams 直接强转。凡走 `onUpdateSelection` 刷新符号栏即崩，
+上屏字符、移动光标都会触发。4.0.0 已带此缺陷。
+
+- 影响文件：`SideSymbolBar.kt`
+
+### `20260821-02` feat：文本编辑键盘增加剪切并修正光标与全选
+
+末行由三等分改为四列、加入剪切键。全选原是开关式，状态与实际选区不同步时要按两次，改为每次直接
+全选，并优先用 setSelection 而非 performContextMenuAction——后者紧接粘贴触发会让部分应用失焦收起键盘。
+行首/行末改发 MOVE_HOME/MOVE_END，既去掉「先全选再移动」的闪烁，也让长文本的视角跟随光标。
+方向键在有选区时先折叠选区：上、左归选区首，下、右归选区尾。
+
+- 影响文件：`InputView.kt`、`ImeService.kt`、`KeyboardData.kt`、`KeyPreset.kt`、`KeyboardLoaderUtil.kt`
+
+### `20260821-01` refactor：模糊音独立成页，侧符号栏排布统一
+
+模糊音十余条规则平铺在输入设置里会把其它项淹没，移入独立子页。侧符号栏原按阈值在「均分」与
+「内容自适应」间二选一，项数一多就整体翻转、「符号设置」那格随之塌陷；改为始终均分且不低于可点下限。
+三处符号栏（九宫格、候选界面、手写）的排布规则抽出共用——手写那处此前一直沿用旧效果。
+
+- 影响文件：新增 `SideSymbolBar.kt`、`FuzzyPinyinFragment.kt`；`AppPrefs.kt`、`InputSettingsFragment.kt`、
+  `T9TextContainer.kt`、`CandidatesContainer.kt`、`HandwritingContainer.kt`、`settings_nav.xml`、`strings.xml`
+
 ## 2026-08-20
 
 ### `20260820-04` feat：模糊音支持，版本升至 4.0.0
