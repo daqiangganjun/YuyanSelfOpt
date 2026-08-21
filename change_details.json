@@ -1,7 +1,140 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-06",
+  "updatedAt": "2026-08-20",
   "entries": [
+    {
+      "id": "20260820-04",
+      "date": "2026-08-20",
+      "type": "feat",
+      "title": "模糊音支持，版本升至 4.0.0",
+      "trigger": "用户要求在输入设置里加模糊音，默认打开 zh=z、ch=c、sh=s，并可自定义其它规则",
+      "rootCause": "Rime 的模糊音由方案的 speller/algebra 在编译 prism 时生成等价拼写，属于引擎侧能力。本项目 assets/rime 下只有编译产物（*.prism.bin、*.table.bin），方案 yaml 以字符串形式内嵌在 libyuyanime.so 中且已是编译后的 compiled_config（algebra 段在编译时即被吸收进 prism，产物里不复存在）。设备上既无方案源文件也无词典源文件，改 algebra 后无法重建 prism，故引擎级模糊音这条路走不通",
+      "solution": "改在输入串层面实现：按模糊规则把当前编码改写成若干等价串，逐条在引擎中重放并取其候选，去重后与原候选交替排列——引擎的候选质量分不对外暴露，跨输入串无从比较高下，做不到真正的同台竞技；但平翘舌打错时正确的整句往往就是模糊串的首选，交替让两边的第 n 名紧挨着，模糊串首选落在第二位，原串首选仍占第一。每条变体都要重放整串按键，逐键去查会拖慢连打，故由 InputView 在输入停顿 180ms 后触发一次。选中模糊音候选时先把引擎输入切换到其来源串再选词，后续输入与词频记录因而都落在正确的串上。设置项含总开关、12 条内置规则与自定义输入框，规则表以键名为唯一事实来源，AppPrefs 按同一份键名建项",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/FuzzyPinYinUtils.kt",
+          "notes": "新增。规则表（声母按前缀替换、韵母按后缀替换，双向）、自定义规则解析与变体串生成；变体数按上限截断，优先改写最近输入的音节"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/RimeEngine.kt",
+          "notes": "新增 appendFuzzyCandidates、replayInput 与 rawInput/rawInputValid；selectCandidate 按 fuzzySourceMap 切换输入串"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/data/KeyRecordStack.kt",
+          "notes": "新增 resetToPlainKeys，切换输入串后按键栈须一并对齐"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "updateCandidate 后调度 fuzzyCandidatesTask，resetCandidateWindow 中撤销"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/AppPrefs.kt",
+          "notes": "Input 下新增模糊音分类：总开关、12 条规则开关（以 Map 持有）、自定义规则文本"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/ManagedPreferenceUi.kt",
+          "notes": "新增 EditTextString，原先只有 EditTextInt，字符串类设置项无 UI 可用"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/ManagedPreferenceCategory.kt",
+          "notes": "新增 editText 构建方法"
+        }
+      ],
+      "verification": "assembleOfflineRelease 构建通过并出包 yuyanSelfOpt_4.0.0_release.apk；真机回归由用户执行",
+      "lessons": [
+        "随包分发的 Rime 是编译产物，方案的 speller/algebra 在设备上无法更改：algebra 只影响 prism，而 librime 的 DictCompiler 在缺少 dict.yaml 时会沿用既有 table 只重建 prism——理论上可行，但 deploy 需要方案源文件，而本项目的方案 yaml 是以 compiled_config 形式内嵌在 .so 里的，源文件根本不存在",
+        "预编译 .so 里能读出不少事实：方案 yaml、schema_list、rime keytable 的键名都以明文字符串存在，`tr -c '[:print:]' '\\n' < libyuyanime.so | grep -E '^.{4,}$'` 即可提取，判断某个引擎能力是否可用时先查一遍，比试错快得多",
+        "候选栏一旦不再是引擎候选的原样呈现（插入自定义短语、滤除、并入其它来源），就必须显式维护展示下标到引擎下标的映射，且翻页追加时同步延长——否则选词会取到另一个词，且错位随翻页累积",
+        "两大开源引擎的模糊音都在同一次查询内完成展开，权重因而天然可比：Rime 在部署期把派生拼写烘焙进 prism，libpinyin 在解析期把音节展开成多个 id 一起查。应用层「查两次再合并」拿不到候选的质量分（CandidateListItem 只有 text 与 comment），只能靠排列方式近似，这是这条路的天花板",
+        "引擎级模糊音在本项目并非不可能：.so 内含完整的 deployer（DictCompiler/BuildPrism/SchemaUpdate 均在），而 librime 的 DictCompiler 在缺少 dict.yaml 时会沿用既有 table.bin 只重建 prism——正是本项目的情形。缺的是一份方案源文件与触发部署的入口（startupRime 的 fullCheck）。代价是改设置需重新部署、prism 膨胀，且部署失败会让方案加载不了，须备好从 assets 恢复 prism 的兜底"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260820-03",
+      "date": "2026-08-20",
+      "type": "feat",
+      "title": "拼音气泡可点击进入编辑",
+      "trigger": "用户希望点击拼音气泡后能自由插入拼音，且不影响分词规则——插入后按默认规则自动分词，也可插入分词符模拟手动分词",
+      "rootCause": "编辑拼音需要在编码串中间落下插入点。librime 的 express_editor 本就处理 Left/Right/Home/BackSpace，看似直接可用，但引擎的插入点带有翻译边界的语义：Context 只翻译插入点之前的编码，真把它挪到中间，候选就只剩前半段的结果，须移回串尾才能看到完整候选。另一处障碍在触摸：气泡浮在键盘上方，落在 contentTopInsets 之外，非悬浮模式用的 TOUCHABLE_INSETS_CONTENT 只覆盖该线以下，气泡区域的触摸会径直穿到宿主应用",
+      "solution": "引擎的插入点始终留在串尾，编辑改为在本侧维护：以 editCaret 记录插入点在按键序列中的位置，按键插入、退格删除都只改按键序列，再用 replaceKey 整串同步给引擎（被拒或同步后校验不符则退回逐键重放），候选因而一直覆盖完整编码，无须来回搬动插入点。点击气泡只改本侧记录，不触碰引擎，也就不必重查候选。显示串与按键序列按「非分词符的个数」互相换算，两者只差引擎自动补入的分词符。onComputeInsets 在气泡可见时改用 TOUCHABLE_INSETS_REGION，区域取『原 content 区 + 气泡矩形』，contentTopInsets 仍取自 mSkbRoot，宿主应用的布局不受影响。编辑态下气泡放大到 1.6 倍——常规字号下拼音只有几毫米高，要点准某个字符（尤其是回到常规输入所需的串尾）相当吃力；插入点做成闪动，灭时染成透明而非删除，字符位仍占着，编码不会随明灭左右跳动。九键整个排除：一个键对应多个字母，编码里的字母只是按键代号而非拼音本身，插改无从谈起",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
+          "notes": "气泡加触摸监听与 moveComposingCaret、composingBubbleBounds；updateComposingBubble 渲染插入点标记"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
+          "notes": "onComputeInsets 在气泡可见时合并其矩形进 touchableRegion"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/RimeEngine.kt",
+          "notes": "新增 editCaret 及 moveCaretTo/caretInComposition/insertAtEditCaret/deleteAtEditCaret/syncInputToRime；显示串与 preedit 不等长时（双拼展开后即如此）不受理编辑"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/data/KeyRecordStack.kt",
+          "notes": "新增 resetToPlainKeys，按大小写还原 T9Key/QwertKey 的分工——拼音选择栏按 T9Key 匹配按键序列，记错类型会让选择栏点击失效"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/DecodingInfo.kt",
+          "notes": "转发 caretInComposition/moveCaretTo"
+        }
+      ],
+      "verification": "assembleOfflineRelease 构建通过并出包；真机回归由用户执行",
+      "lessons": [
+        "输入法窗口中位于 contentTopInsets 之上的视图默认不接收触摸。要让它可点又不顶起宿主内容，只能改用 TOUCHABLE_INSETS_REGION 并把原 content 区与该视图矩形合并，单纯抬高 contentTopInsets 会让宿主界面随该视图的显隐而跳动",
+        "librime 的插入点不只是编辑位置，还是翻译边界：其后的编码不参与候选。要做「插入点在中间但候选仍完整」，就不能真去挪引擎的插入点，而应把插入点记在自己这边、改完整串再同步过去",
+        "拼音显示串由 preedit 逐段等长改写而来，可按下标互相换算；但改写在段数对不上时会走兜底分支导致长度不等（双拼更是把两个码位展开成完整拼音），凡按下标换算处都要先校验长度",
+        "整串替换输入后要校验引擎编码是否与按键序列一致，并备好逐键重放的退路——replaceKey 是 .so 内的实现，边界行为无源码可查",
+        "浮层上的文字交互要按可点性重新定尺寸：气泡是给人读的，常规字号足够；一旦要按字符点选，就得放大到手指够得着的粒度，否则功能可用但点不准"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260820-02",
+      "date": "2026-08-20",
+      "type": "feat",
+      "title": "中文下滤除与编码相同的单字母候选",
+      "trigger": "用户反馈拼音输入单个字母时，候选首位总是该字母本身，占位而无用——要输出字母直接回车即可",
+      "rootCause": "词库收录了字母条目，中文方案下输入单个字母时该条目权重最高，排在候选首位，把汉字整体挤后一位",
+      "solution": "在候选装配处滤掉与编码完全相同的单字母候选。过滤会打乱下标，故同时建立展示候选到引擎候选的映射，选词与翻页均按映射换算。若滤后为空则保留原候选——上层把『无候选』当作输入结束，会清掉整轮输入。回车上屏走的是编码串本身，不受过滤影响",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/RimeEngine.kt",
+          "notes": "新增 collectRimeCandidates 与 rimeIndexMap/rimeCandidateCount；getNextPageCandidates 同步延长映射"
+        }
+      ],
+      "verification": "assembleOfflineRelease 构建通过并出包；真机回归由用户执行",
+      "lessons": [
+        "候选列表为空在本项目中等同于『本轮输入结束』，任何过滤都必须保证不会把列表滤空，否则用户的输入会被直接清掉"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260820-01",
+      "date": "2026-08-20",
+      "type": "fix",
+      "title": "数字键盘侧符号栏留白过大",
+      "trigger": "用户反馈数字键盘左侧符号栏中，符号与「符号设置」之间存在大量空白",
+      "rootCause": "符号栏是一个占满三行键高的 RecyclerView，各项按内容高度排布，末尾的「符号设置」还额外带 20dp 外边距。数字键盘的侧符号可由用户自行增删，只留两三个时项高之和远小于栏高，空白便集中出现在设置按钮前后",
+      "solution": "按项数均分栏高，符号与设置按钮铺满整栏；项数多到均分高度低于 36dp 时退回内容自适应并滚动。候选界面的左侧拼音栏同此处理，两处表现一致。齿轮图标固有尺寸 35dp，原先靠 20dp 外边距压着才不显眼，均分栏高后显式收窄到 22dp，与旁边的符号视觉大小相当",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/PrefixAdapter.kt",
+          "notes": "新增 itemHeight 参数，大于 0 时逐项固定高度"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/T9TextContainer.kt",
+          "notes": "记录符号栏可用高度并计算均分高度，去掉设置按钮的 20dp 外边距，齿轮图标收窄到 22dp"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/CandidatesContainer.kt",
+          "notes": "同上"
+        }
+      ],
+      "verification": "assembleOfflineRelease 构建通过并出包；真机回归由用户执行",
+      "commits": {}
+    },
     {
       "id": "20260806-04",
       "date": "2026-08-06",
@@ -950,6 +1083,21 @@
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/pinyin4j/PolyphoneReading.kt",
         "role": "手写反查注音，按《现代常用多音字表》给出读音",
         "notes": "不用 pinyin4j 的多音输出——那是字书级全部异读，含古音。表内字列全部现代读音，表外字回落 pinyin4j 首选音。表以 by lazy 加载，不用手写则不解析"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/RimeEngine.kt",
+        "role": "Rime 引擎的业务封装，负责按键下发、候选装配、拼音串改写与候选下标映射",
+        "notes": "showCandidates 并非引擎候选的原样呈现：前置自定义短语（customPhraseSize 条，comment 为 📋）、滤除与编码相同的单字母候选、并入模糊音候选，故 rimeIndexMap/fuzzySourceMap 记录每一项对应的引擎下标与来源输入串，选词、翻页都要按其换算。rawInput 记录用户实际按键并与引擎输入严格对应，选词、选拼音后失效（rawInputValid=false）；模糊音补查与拼音编辑都依赖它。editCaret 是拼音编辑的插入点，只记在本侧，引擎自身的插入点始终留在串尾——引擎只翻译其插入点之前的编码，挪到中间候选就只剩前半段。appendFuzzyCandidates 与 getNextPageCandidates 都会改这些共享结构，且后者可能在后台线程调用，二者均加 @Synchronized"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/FuzzyPinYinUtils.kt",
+        "role": "模糊音规则表与变体串生成",
+        "notes": "PRESET 中的键名同时是 AppPrefs 里各开关的 key，增删规则只需改这一处。声母规则按前缀替换、韵母规则按后缀替换，两个方向都试；自定义规则按 from/to 是否为已知声母判断替换方式。variantsOf 先逐个改写单音节（由后往前）再给出整串改写版，按 limit 截断"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/T9TextContainer.kt",
+        "role": "九宫格与数字键盘容器，含左侧符号/候选拼音栏",
+        "notes": "左侧栏是一个 SwipeRecyclerView，高度取自占位键 USER_KEYCODE_LEFT_SYMBOL 的区域；无候选拼音时显示侧符号并追加「符号设置」footer。各项高度按项数均分铺满栏高（evenItemHeight），均分高度低于 36dp 时退回自适应并滚动"
       }
     ],
     "constraints": [
@@ -961,7 +1109,11 @@
       "com.google.android.datatransport:transport-backend-cct 不可从依赖中排除，ML Kit 初始化时会强制实例化 CCTDestination；遥测的阻断方式是在 manifest 中移除其调度组件",
       "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*",
       "注音一律经 PolyphoneReading，禁止直接调用 PinyinHelper.toHanYuPinyinMulti——后者会输出古音与罕用音",
-      "反射访问 androidx 私有字段（RecyclerView$ViewHolder.itemView、Preference.mDefaultValue）依赖 proguard.cfg 中的 keep 规则，升级依赖或新增此类反射时必须同步维护"
+      "反射访问 androidx 私有字段（RecyclerView$ViewHolder.itemView、Preference.mDefaultValue）依赖 proguard.cfg 中的 keep 规则，升级依赖或新增此类反射时必须同步维护",
+      "Rime 方案的 speller/algebra 在设备上无法更改：assets/rime 下只有编译产物，方案 yaml 以 compiled_config 形式内嵌于 libyuyanime.so，没有源文件可供 deploy 重建 prism。模糊音一类需改 algebra 的能力只能在输入串层面另行实现",
+      "候选列表为空等同于本轮输入结束，任何对候选的过滤都必须保证不把列表滤空",
+      "改动 showCandidates 的组成（增删、重排、并入其它来源）时必须同步维护 RimeEngine 中的 rimeIndexMap/fuzzySourceMap，否则选词会取到错误的引擎下标",
+      "拼音编辑不得移动引擎自身的插入点：librime 只翻译插入点之前的编码，挪到中间会让候选只剩前半段。插入点记在 RimeEngine.editCaret，编辑后整串同步给引擎"
     ]
   }
 }

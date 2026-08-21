@@ -2,6 +2,40 @@
 
 本文件为变更的简要索引，按时间倒序排列。每条记录的完整明细（根因分析、涉及文件、验证方式、可复用知识）见 `change_details.json` 中对应 `id` 的条目。
 
+## 2026-08-20
+
+### `20260820-04` feat：模糊音支持，版本升至 4.0.0
+
+Rime 的模糊音须靠 `speller/algebra` 重编译 prism，随包分发的只有编译产物，设备上无法重建。
+改在输入串层面处理：按规则改写拼音再查一遍，所得候选与原候选交替排列，模糊串首选落在第二位。
+输入设置新增「模糊音」分类，默认开 zh=z、ch=c、sh=s，另有九条内置规则与自定义项。仅全键拼音生效。
+
+- 影响文件：新增 `FuzzyPinYinUtils.kt`；`RimeEngine.kt`、`Kernel.kt`、`DecodingInfo.kt`、
+  `InputView.kt`、`AppPrefs.kt`、`ManagedPreferenceUi.kt`、`ManagedPreferenceCategory.kt`、`strings.xml`
+
+### `20260820-03` feat：拼音气泡可点击编辑
+
+点击拼音气泡即把插入点移到点中的字符处，输入的字母插在该处并由引擎重新分词，输入分词符可强制断开。
+引擎自身的插入点始终留在串尾，编辑只改按键序列再整串同步过去，候选因而一直覆盖完整编码。
+编辑态下气泡放大 1.6 倍、插入点闪动；九键不适用（键上的字母是按键代号而非拼音）。
+气泡原先浮在 `contentTopInsets` 之外不接收触摸，须在 `onComputeInsets` 中并入可触摸区域。
+
+- 影响文件：`InputView.kt`、`ImeService.kt`、`RimeEngine.kt`、`KeyRecordStack.kt`、`Kernel.kt`、`DecodingInfo.kt`
+
+### `20260820-02` feat：中文下滤除与编码相同的单字母候选
+
+词库收录了字母条目，中文输入单个字母时它排在候选首位，把汉字挤到后面；要输出该字母回车即可。
+过滤会打乱下标，故同时建立展示候选到引擎候选的映射，选词、翻页均按映射换算。
+
+- 影响文件：`RimeEngine.kt`
+
+### `20260820-01` fix：数字键盘侧符号栏留白过大
+
+符号栏按内容高度排布，数字键盘只有两三个符号时符号与「符号设置」之间、以及栏底都空一大片。
+改为按项数均分栏高铺满，项数多到均分高度不足以点按时退回自适应并滚动。
+
+- 影响文件：`PrefixAdapter.kt`、`T9TextContainer.kt`、`CandidatesContainer.kt`
+
 ## 2026-08-06
 
 ### `20260806-04` fix：修复 release 包打开剪贴板崩溃，版本升至 3.0.1

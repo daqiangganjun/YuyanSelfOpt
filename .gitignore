@@ -12,3 +12,6 @@ CLAUDE.md
 /.kotlin
 *.log
 build_log.txt
+
+# 临时探查用，不入库
+tmp_*/
