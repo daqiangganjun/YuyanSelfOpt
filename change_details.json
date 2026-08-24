@@ -1,7 +1,29 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-21",
+  "updatedAt": "2026-08-24",
   "entries": [
+    {
+      "id": "20260824-01",
+      "date": "2026-08-24",
+      "type": "chore",
+      "title": "librime 自编译可行性验证（后端替换阶段一）",
+      "trigger": "预编译的 libyuyanime.so 为闭源、带包名白名单与技术保护措施，方案 yaml 内嵌其中不可修改，导致模糊音只能在输入串层面模拟、且无法用于双拼与九键；同时用户反馈 qing jin xing 输出「请进性」而墨奇输出「请进行」。需在动代码前确认自编译 librime 能否替代它",
+      "rootCause": "两项能力缺失都源于同一处：assets/rime 下只有编译产物，没有 .schema.yaml，algebra 无从修改；.so 内也不含 octagram 符号、assets 无任何 .gram 文件，说明未编入语法模型，长句切分只能走 librime 默认打分路径。词条数（191 万）比白霜大，但缺搭配模型反而更易在同音候选中选错",
+      "solution": "移植 Xime（GPL-3.0，其 JNI 层又基于 trime）的 NDK 构建装配，用 NDK 28.2 + CMake 3.31.6 交叉编译 librime 1.17.0（含 octagram/lua/predict 三插件），产出 arm64-v8a 独立可执行程序 rime_probe，配白霜方案在真机跑通「部署→建会话→输入→取候选」全链路。不改动仓库任何现有代码",
+      "changedFiles": [
+        {
+          "path": "tmp_rime_jni/",
+          "notes": "验证工作区，未入库（.gitignore 的 tmp_*/ 已覆盖）。含 CMakeLists.txt（精简自 Xime，去掉 ONNX/sherpa，产物改为可执行文件）、rime_probe.cc、cmake/BoostLocal.cmake、enable_fuzzy.py、run_probe.sh"
+        }
+      ],
+      "verification": "真机 RMX6688（arm64-v8a，Android 15）实测：白霜全拼 qingjinxing 首位即「请进行」（语燕为「请进性」）；开启 zh=z/ch=c/sh=s 后 zidaole 首位「知道了」，原本占前三的「字到了/自到了/子到了」退至 14 位后；同一套规则在九键（9432653）与小鹤双拼（zidcle）同样首位命中「知道了」。中英混输 hello 首位英文、ppt 出 PPT/PowerPoint 且无需切方案。首次部署（全拼+4 双拼+九键+英文）21.7 秒，产物 78 MB；仅改 algebra 后重新部署 2.2 秒",
+      "lessons": [
+        "词条数量与打字准确度不是一回事：白霜靠 grammar(zh-moqi) 加 non_collocation_penalty/grammar_penalty 调参改善造句，雾凇则完全不配 grammar 而靠词频，两条路都行得通，语燕是两样都没有",
+        "验证类工作应先做成不依赖 UI 的独立可执行文件，用 adb shell 直接跑。省掉 Gradle/AGP 与 JNI 一整层，出问题时排查面小得多",
+        "adb 在 Git Bash 下会把 /data/local/tmp 当成 MSYS 路径转换成 Windows 路径，须改用 PowerShell 或 MSYS_NO_PATHCONV；推送多文件目录远慢于打成单个 tar 再在设备上解压（104 MB 由超时 10 分钟降到 1.8 秒）"
+      ],
+      "commits": {}
+    },
     {
       "id": "20260821-05",
       "date": "2026-08-21",
@@ -1146,7 +1168,7 @@
       "os": "Windows，终端使用 PowerShell",
       "jdk": "仅有 JDK 21（无 17）。项目 Java 目标为 17，CI 使用 17，故本机构建必须对齐 Kotlin jvmTarget",
       "androidSdk": "%LOCALAPPDATA%\\Android\\Sdk，含 platforms android-35/36、build-tools 34.0.0（手动装）与 36.0.0",
-      "ndk": "不需要。yuyansdk/libs 下为预编译 .so，build.gradle 中的 abiFilters 仅作过滤",
+      "ndk": "NDK 28.2.13676358 与 CMake 3.31.6 已装（sdkmanager 走代理：--proxy=http --proxy_host=127.0.0.1 --proxy_port=10808）。沿用预编译 .so 时确实不需要 NDK，但自编译 librime 需要；旧记录『不需要 NDK』已作废",
       "network": {
         "proxy": "http://127.0.0.1:10808，仅接受 HTTP 代理协议（socks5 不可用，实测连接失败）。curl 与 git 可用，Java/Gradle 不可用",
         "maven": "使用阿里云镜像，见 build_mirror.init.gradle",
@@ -1167,7 +1189,15 @@
       "releaseBuildCommand": "gradlew.bat assembleOfflineRelease --init-script build_mirror.init.gradle；产物在 app/build/outputs/apk/offline/release/，签名取自 keystore/，与 debug 同一份（包名后缀 .release 与 .debug 可共存）",
       "concurrency": "gradle.properties 限制并发为逻辑核心的 2/3：org.gradle.workers.max 与 kotlin.daemon.jvmargs 的 -XX:ActiveProcessorCount 需分别设置。换机器需按 floor(cores*2/3) 重算",
       "githubCli": "gh 2.97.0 位于 D:/Path/gh/bin/gh.exe（已入用户 PATH），账号 daqiangganjun，scopes 含 repo。调用时须带 HTTPS_PROXY=http://127.0.0.1:10808；非交互会话不加载 PowerShell profile，且环境变量不跨调用保留，必须与 gh 命令写在同一条语句内",
-      "release": "tag 统一加 selfopt- 前缀（如 selfopt-v3.0.0），与仓库中继承自上游的 v4.x 标签区分"
+      "release": "tag 统一加 selfopt- 前缀（如 selfopt-v3.0.0），与仓库中继承自上游的 v4.x 标签区分",
+      "librimeBuild": {
+        "sources": "librime 1.17.0（git --depth 1 --recursive，deps 含 glog/yaml-cpp/leveldb/marisa-trie/opencc）、librime-octagram、librime-lua 及其 thirdparty 分支、librime-predict、google/snappy（供 leveldb 压缩）",
+        "assembly": "CMake 装配取自 Xime（GPL-3.0）app/src/main/jni/ 的 CMakeLists.txt 与 cmake/*.cmake。Rime.cmake 负责把插件复制进 librime/plugins/ 并给 Lua 5.4 打 Android 32 位 fseeko 补丁，必须保留",
+        "boost": "1.89.0。上游 Boost.cmake 在 tarball 不位于构建目录时会联网下载，且顺手 REMOVE_RECURSE 掉已解压的 boost 目录；改用自写的 cmake/BoostLocal.cmake 直接引用预解压目录，避开这一路径",
+        "pitfalls": "Xime 手写的 boost 头文件列表缺 boost/vmd，而 librime 1.17.0 的 rime_api.cc 用它展开 RIME_EXTRA_MODULES 宏，会报 fatal error；改用 boost/libs/*/include 与 boost/libs/*/*/include 通配即可。X11/keysym.h not found 是警告，可忽略",
+        "artifactSize": "arm64-v8a 可执行文件 strip 前 82 MB，llvm-strip --strip-all 后 4.2 MB，与现有 libyuyanime.so 的 4.4 MB 相当",
+        "configureCommand": "cmake -S tmp_rime_jni -B tmp_rime_jni/build -G Ninja -DCMAKE_MAKE_PROGRAM=<sdk>/cmake/3.31.6/bin/ninja.exe -DCMAKE_TOOLCHAIN_FILE=<sdk>/ndk/28.2.13676358/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release"
+      }
     },
     "codeMap": [
       {
@@ -1254,6 +1284,21 @@
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SideSymbolBar.kt",
         "role": "侧边符号栏的共用排布规则，九宫格、候选界面、手写三处共用",
         "notes": "evenItemHeight 始终返回均分高度且不低于可点下限，不做「均分与自适应」的二选一——按阈值翻转会在符号增删时突变。applyFooterHeight 只改现有 layoutParams 的 height，绝不替换其类型：RecyclerView 会把 itemView 的 layoutParams 强转成 RecyclerView.LayoutParams，在它接管之后换类型会在 setAdapter 时抛 ClassCastException"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/core/Rime.kt",
+        "role": "JNI 声明层，与预编译 libyuyanime.so 的符号一一对应",
+        "notes": "仅 16 个 external 函数，无任何部署（deploy/maintenance）API，这是模糊音无法进引擎的直接原因。其中 replaceRimeKey、getRimeAssociateList、selectRimeAssociate 为上游自加的非标准接口，librime 原生没有——联想那两个可由 librime-predict 插件替代。包名与符号硬绑定，不得改名"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/core/Kernel.kt",
+        "role": "引擎门面，向上层暴露输入、候选、配置刷新",
+        "notes": "nativeUpdateImeOption 只设两个 Rime option：traditionalization 与 emoji。这两个名字是 Rime 生态通用惯例（白霜、雾凇的 switches 同名，opencc 配置也同为 s2t.json/emoji.json），换任何主流方案都不必改动"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/DoublePinYinUtils.kt",
+        "role": "双拼码还原成完整拼音，供拼音气泡显示",
+        "notes": "硬编码 4 套双拼键位表（abc/紫光/乱序17/小鹤），与 T9PinYinUtils、LX17PinYinUtils 同属应用层持有方案知识的设计。实测 librime 在双拼下 preedit 直接就是 zi dao le、九键候选的 comment 自带 zhi dao le，换后端后这三个工具类大部分可简化"
       }
     ],
     "constraints": [
@@ -1266,12 +1311,14 @@
       "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*",
       "注音一律经 PolyphoneReading，禁止直接调用 PinyinHelper.toHanYuPinyinMulti——后者会输出古音与罕用音",
       "反射访问 androidx 私有字段（RecyclerView$ViewHolder.itemView、Preference.mDefaultValue）依赖 proguard.cfg 中的 keep 规则，升级依赖或新增此类反射时必须同步维护",
-      "Rime 方案的 speller/algebra 在设备上无法更改：assets/rime 下只有编译产物，方案 yaml 以 compiled_config 形式内嵌于 libyuyanime.so，没有源文件可供 deploy 重建 prism。模糊音一类需改 algebra 的能力只能在输入串层面另行实现",
+      "Rime 方案的 speller/algebra 在设备上无法更改：assets/rime 下只有编译产物，方案 yaml 以 compiled_config 形式内嵌于 libyuyanime.so，没有源文件可供 deploy 重建 prism。模糊音一类需改 algebra 的能力只能在输入串层面另行实现。注：该约束仅针对当前预编译 .so，自编译 librime 已实测可解除（见 20260824-01）",
       "候选列表为空等同于本轮输入结束，任何对候选的过滤都必须保证不把列表滤空",
       "改动 showCandidates 的组成（增删、重排、并入其它来源）时必须同步维护 RimeEngine 中的 rimeIndexMap/fuzzySourceMap，否则选词会取到错误的引擎下标",
       "拼音编辑不得移动引擎自身的插入点：librime 只翻译插入点之前的编码，挪到中间会让候选只剩前半段。插入点记在 RimeEngine.editCaret，编辑后整串同步给引擎",
       "不得替换已交给 RecyclerView 管理的 itemView 的 layoutParams 类型（含 header/footer）：RecyclerView 会将其强转为 RecyclerView.LayoutParams，改尺寸只能原地改字段",
-      "「移到行首/行末」用 MOVE_HOME/MOVE_END 按键而非 setSelection，前者才会让宿主把光标滚进可视区；能用 InputConnection 完成的编辑操作不要走 performContextMenuAction，后者会惊动宿主选择态、连续调用可能导致失焦收起键盘"
+      "「移到行首/行末」用 MOVE_HOME/MOVE_END 按键而非 setSelection，前者才会让宿主把光标滚进可视区；能用 InputConnection 完成的编辑操作不要走 performContextMenuAction，后者会惊动宿主选择态、连续调用可能导致失焦收起键盘",
+      "模糊音一类派生等价拼写的 algebra 规则必须排在双拼键位 xform 与九键数字映射之前：xform 不保留原形，转换后 ^zh 之类的规则已匹配不到。白霜全拼把模糊音块放在 algebra 首位正是此理",
+      "librime 部署时缺 <dict>.reverse.bin 会无条件置 rebuild_table（dict_compiler.cc 中该检查不判断是否存在源文件），继而用收集到的空数据重建 table。因此没有 dict.yaml 时不能只靠 table.bin 重建 prism；反过来说，正常部署本就会产出 reverse.bin，语燕 assets 缺它是打包时去掉的"
     ]
   }
 }
