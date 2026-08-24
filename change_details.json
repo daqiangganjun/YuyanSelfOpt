@@ -3,6 +3,32 @@
   "updatedAt": "2026-08-24",
   "entries": [
     {
+      "id": "20260824-02",
+      "date": "2026-08-24",
+      "type": "chore",
+      "title": "用户词库跨方案迁移验证（后端替换阶段一续）",
+      "trigger": "若把后端从预编译 .so 换成自编译 librime、并把方案由语燕自带换成白霜，老用户在 pinyin.userdb 里积累的学习记录是否会丢。这属于一旦到集成阶段才发现不行就难以补救的事项，故先行验证",
+      "rootCause": "userdb 的库名与方案的 dictionary 名绑定（语燕为 pinyin，白霜为 rime_frost），直接改名搬运 LevelDB 目录既跨方案又跨 librime 版本（语燕 1.11.2、自编译 1.17.0），风险不明",
+      "solution": "不搬 LevelDB 目录，改走 librime levers 模块的官方通道：export_user_dict 导出为文本、import_user_dict 导入目标方案。为此新增 rime_userdb.cc 工具（list/export/import 三种模式），经 rime->find_module(\"levers\")->get_api() 取 RimeLeversApi",
+      "changedFiles": [
+        {
+          "path": "tmp_rime_jni/rime_userdb.cc",
+          "notes": "userdb 迁移工具，未入库。CMakeLists.txt 同步新增 rime_userdb target"
+        },
+        {
+          "path": "tmp_rime_jni/userdb_backup/",
+          "notes": "设备上语燕 rime 目录的备份（pinyin/english/stroke 三个 userdb 与 user.yaml、installation.yaml），以及导出的 yuyan_pinyin.txt"
+        }
+      ],
+      "verification": "真机实测：语燕 pinyin.userdb 导出 1452 条（其中多音节词 1186 条），导入白霜 rime_frost 全部成功。导入前 haodu 首位为「豪赌」、xiaoqiuqiu 首位为「小球球」，导入后分别变为「好嘟」「小秋秋」并带用户词标记 *；「那个」「如果」同样升至首位。同一份 userdb 在小鹤双拼（hcdu）与九键（42638）下同样命中「好嘟」，跨输入方式共享成立",
+      "lessons": [
+        "userdb 导出文本的格式是「词条 TAB 空格分隔的标准全拼音节 TAB 使用次数」，不含 syllable id 也不含方案特定编码（双拼码、九键数字），这正是它能跨方案迁移的根本原因",
+        "迁移应走 export/import 文本通道而非直接搬 LevelDB 目录：文本形式同时跨越了方案名与 librime 版本差异，且人类可读，可直接作为备份格式",
+        "白霜多个方案共用一个 dictionary（rime_frost）、各自用 prism 区分，user_dict 未单独指定时即随 dictionary 名走，因此全拼/双拼/九键天然共享同一份 userdb。语燕现有 9 个方案只对应 3 个 userdb，是同一种模式"
+      ],
+      "commits": {}
+    },
+    {
       "id": "20260824-01",
       "date": "2026-08-24",
       "type": "chore",
@@ -1318,7 +1344,8 @@
       "不得替换已交给 RecyclerView 管理的 itemView 的 layoutParams 类型（含 header/footer）：RecyclerView 会将其强转为 RecyclerView.LayoutParams，改尺寸只能原地改字段",
       "「移到行首/行末」用 MOVE_HOME/MOVE_END 按键而非 setSelection，前者才会让宿主把光标滚进可视区；能用 InputConnection 完成的编辑操作不要走 performContextMenuAction，后者会惊动宿主选择态、连续调用可能导致失焦收起键盘",
       "模糊音一类派生等价拼写的 algebra 规则必须排在双拼键位 xform 与九键数字映射之前：xform 不保留原形，转换后 ^zh 之类的规则已匹配不到。白霜全拼把模糊音块放在 algebra 首位正是此理",
-      "librime 部署时缺 <dict>.reverse.bin 会无条件置 rebuild_table（dict_compiler.cc 中该检查不判断是否存在源文件），继而用收集到的空数据重建 table。因此没有 dict.yaml 时不能只靠 table.bin 重建 prism；反过来说，正常部署本就会产出 reverse.bin，语燕 assets 缺它是打包时去掉的"
+      "librime 部署时缺 <dict>.reverse.bin 会无条件置 rebuild_table（dict_compiler.cc 中该检查不判断是否存在源文件），继而用收集到的空数据重建 table。因此没有 dict.yaml 时不能只靠 table.bin 重建 prism；反过来说，正常部署本就会产出 reverse.bin，语燕 assets 缺它是打包时去掉的",
+      "迁移用户词库须走 librime levers 的 export_user_dict/import_user_dict 文本通道，不要直接改名搬运 LevelDB 目录：导出文本只含词条、标准全拼音节与使用次数，可跨方案名与 librime 版本；直接搬目录则要同时赌这两者兼容"
     ]
   }
 }

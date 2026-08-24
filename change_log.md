@@ -4,6 +4,14 @@
 
 ## 2026-08-24
 
+### `20260824-02` chore：用户词库跨方案迁移验证
+
+换后端且换方案后，老用户在 `pinyin.userdb` 的学习记录是否会丢。改走 librime levers 的
+`export_user_dict`/`import_user_dict` 文本通道（不搬 LevelDB 目录），实测语燕 1452 条全量导入
+白霜 `rime_frost`，「好嘟」「小秋秋」等个人化用词升至首位，且双拼与九键共享同一份 userdb。
+
+- 影响文件：无仓库改动，工具与备份在 `tmp_rime_jni/`（未入库）
+
 ### `20260824-01` chore：librime 自编译可行性验证
 
 预编译 `.so` 不暴露部署 API、方案 yaml 又内嵌其中，模糊音只能在输入串层面模拟且用不了双拼与九键；
