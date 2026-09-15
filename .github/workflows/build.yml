@@ -28,6 +28,22 @@ jobs:
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > ${{ secrets.RELEASE_STORE_FILE }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare native build dependencies
+        run: |
+          python -m pip install -r yuyansdk/native/requirements.txt
+          sdkmanager "ndk;28.2.13676358" "cmake;3.31.6"
+
+      - name: Cache native sources
+        uses: actions/cache@v4
+        with:
+          path: yuyansdk/native/.cache
+          key: native-sources-${{ runner.os }}-${{ hashFiles('yuyansdk/native/dependencies.lock.json') }}
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 

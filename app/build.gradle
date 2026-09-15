@@ -103,4 +103,8 @@ android {
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation project(':yuyansdk')
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.preference:preference-ktx:1.2.1'
+    androidTestImplementation 'androidx.lifecycle:lifecycle-livedata-core:2.6.2'
 }

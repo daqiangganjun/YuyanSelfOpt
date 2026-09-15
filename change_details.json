@@ -1,7 +1,60 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-24",
+  "updatedAt": "2026-09-15",
   "entries": [
+    {
+      "id": "20260915-01",
+      "date": "2026-09-15",
+      "type": "feat",
+      "title": "自编译 librime 接入与旧用户词库迁移，版本 5.0.0",
+      "trigger": "旧 libyuyanime.so 的非原版包名时间限制使输入失效，用户确认按评审方案实现开源核心替换，并授权使用已连接的虚拟设备进行调试",
+      "rootCause": "旧闭源 JNI 无法维护；新核心接入还需处理逻辑方案标识、旧九键/乱序编码、候选下标、拼音显示、部分选词后的编辑及用户数据迁移，单纯更换动态库不能保持现有输入行为",
+      "solution": "新增固定版本 native 构建链和自有 libselfopt_rime.so，使用 librime 1.17.0、Lua、octagram、predict；SchemaRegistry 将旧界面标识映射到白霜/雾凇共 20 个方案。T9 与乱序17的编码规则适配现有按键栈，模糊音进入 algebra，删除应用层重复查询。预测数据由真实基础词频生成并按宿主光标上下文查询，保留 JNI UTF-16 边界及全局候选下标。EngineRuntime 在后台解包、部署、迁移，检查部署失败通知及实际字典可用性，支持重试恢复；普通按键和 native 操作串行保护。旧三类 userdb 先复制备份、在独立源目录导出，再导入暂存目标目录，核对条数并原子启用，保留原始目录。增加笔画通配 Lua、候选翻页代次检查、物理键盘视图迟创建的输入状态补发，并禁止 :hw 进程重复启动 Rime。更新构建依赖、CI、许可证说明和版本号",
+      "changedFiles": [
+        { "path": "yuyansdk/native/", "notes": "自有 JNI、CMake、锁定依赖、构建与方案生成脚本、笔画通配翻译器；生成物与缓存不入库" },
+        { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/", "notes": "新增运行时和方案映射，适配 Rime/Kernel/按键与候选逻辑，删除应用层模糊音重放" },
+        { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/", "notes": "准备状态与重试入口、词库切换设置、主进程初始化、物理键盘生命周期、过期翻页丢弃及源码许可证说明" },
+        { "path": "yuyansdk/src/main/assets/rime/", "notes": "旧预编译词库移出构建；本地备份在 native/.cache/legacy-assets，APK 仅使用生成的新词库包" },
+        { "path": "app/src/androidTest/、app/src/debug/", "notes": "真实词库/JNI 集成回归与仅调试包可用的本地输入测试宿主" },
+        { "path": "build.gradle、app/build.gradle、yuyansdk/build.gradle、.github/workflows/build.yml", "notes": "版本 5.0.0、原生构建任务、测试依赖与 CI 的 Python/NDK/CMake 准备" },
+        { "path": "README.md、yuyansdk/README.md、CLAUDE.md、change_log.md、change_details.json", "notes": "同步构建、迁移、许可、兼容边界及开发记忆；CLAUDE.md 为既有本地忽略文件" }
+      ],
+      "verification": "Windows PowerShell 下以默认命令成功从 native/.cache 中的固定源码构建，不再依赖临时验证工作区。Android 15 的 Pixel_35_Lite（emulator-5554，支持 ARM64 转换）完成 11 项真实词库集成测试：全拼/英文混输、T9/六种双拼/乱序17/笔画与通配、模糊音部署、全局下标翻页选词、emoji/繁体跨方案恢复、光标上下文联想、字库切换与重启、侧栏选音撤销、保留已选词的后缀编辑、拼音编辑及缺失方案失败恢复。实际触屏完成九键输入、侧栏选音、候选点击上屏「你好」。将历史 yuyan_userdb.tar 作为旧版数据放入调试应用外部目录后，迁移导出的 1452 条拼音记录与原始 yuyan_pinyin.txt 逐条一致，实际物理键盘输入 haodu 的首选为「好嘟」；冷启动后 .migration 的时间/大小不变且记录仍逐条一致。Debug/Release 构建已通过；新 JNI 的 ELF LOAD 对齐为 0x4000，APK 不再包含旧 libyuyanime.so 或 assets/rime。现有 ML Kit libdigitalink.so 仍为 0x1000，不能宣称整包已兼容 16 KB。模拟器启动时曾发生系统 UI 自身 ANR，界面测试关闭了动画；此前的功能回归未安装到实体手机 最后一次 instrumentation_delivery.txt 为 OK (11 tests)，耗时 74.078 秒；Release 5.0.0（versionCode 50000）验签及 ZIP 校验通过，已在虚拟设备启用并将迁移词「好嘟」上屏。Release 备份注入时发现 lost 子目录仍归 shell 所有，恢复为该应用 UID 后迁移通过，1452 条导出记录仍逐条一致。当前 Release APK SHA256 为 76275acc558083ff40de52fdfe7c6f22e223381a079bc2d7d61f298d850e252f，体积 70663933 字节。 2026-09-15 12:40:36 按用户指定覆盖安装到首个设备 3B157R006H000000（RMX6688）：adb install -r 返回 Success，包管理器确认从 4.1.0/40100 更新为 5.0.0/50000；未卸载或清空应用数据。本次仅确认安装结果，未重新验证真机输入功能。",
+      "lessons": [
+        "Windows 生成 YAML 的 CRLF 曾使 Kotlin 的模糊音占位符替换失败，必须统一换行并检查没有遗留占位符；错误占位规则还会使后续 T9 algebra 失效",
+        "英文次翻译器需明确引用已构建的 prism，并继承英文大小写派生规则；只有词库文件而没有相应 prism 时 hello/PPT 混输不会正常工作",
+        "不能用码点大于 0x1f000 判断 emoji，这会误判 CJK 扩展区字符；验证应限定实际 emoji 区间",
+        "librime 维护线程通过 deploy/failure 通知报告失败，且会话存在不等于字典可用；准备完成前须检查实际翻译能力",
+        "物理输入会话可能早于候选视图创建，需在视图创建时补发 EditorInfo；两个视图构造器不能相互重置全局输入模式，新根视图需单独重建键盘容器",
+        "部分选词后只替换原始编码的未选后缀，Segmentation 的公共前缀保留机制才能保住已选词；不要把已选文字写回原始输入串",
+        "JNI 字符串采用 UTF-16 边界转换并及时释放引用/引擎结果，不能把含 emoji 的普通 UTF-8 直接交给 NewStringUTF",
+        "联网核对资料：Android JNI tips https://developer.android.com/ndk/guides/jni-tips；16 KB 文档 https://developer.android.com/guide/practices/page-sizes；T9 部分选词讨论 https://github.com/rime/librime/issues/1122；预测插件 https://github.com/rime/librime-predict；Boost 官方 Release 的 cmake.tar.xz 下载地址与 SHA256"
+      ],
+      "commits": {}
+    },
+    {
+      "id": "20260914-02",
+      "date": "2026-09-14",
+      "type": "docs",
+      "title": "评审 claude-dev.md 中的自编译引擎接入路线",
+      "trigger": "用户要求参考历史开发对话 claude-dev.md，评价后端替换方案",
+      "rootCause": "历史对话混合了早期假设、后续修正与阶段性实测，不能直接作为完整接入规格。核心能力的命令行验证没有覆盖 Android JNI、现有九键选音、拼音编辑、联想触发、生命周期及升级部署。记录还将本项目误写为 GPL-3.0，并把 SDK 的四架构配置误当成应用必须打包四架构",
+      "solution": "建议沿用自编译 librime + 自有 JNI，先将固定版本依赖和最小白霜方案接入现有界面，完成全拼输入、候选上屏及可靠初始化，再补九键/双拼交互、联想、模糊音配置部署与用户词库迁移，最后扩展雾凇等方案。保持引擎访问串行，部署和数据迁移应可恢复且重复执行不重复累加；初始化失败需要可见状态。方案 id、键盘类型和能力先集中映射，避免一次重构成任意方案平台。此为评审建议，未实施代码变更",
+      "changedFiles": [
+        { "path": "change_log.md", "notes": "新增评审索引" },
+        { "path": "change_details.json", "notes": "补充已验证边界、接口差异与源码职责" }
+      ],
+      "verification": "静态阅读 claude-dev.md 的路线讨论、阶段一结果及末尾限定，并核对当前源码：T9PinYinUtils 将 abc/def 等映射为 A/D 等大写字母，KeyRecordStack 按此记录与恢复拼音选择；白霜九键 probe 测的是数字码。librime-predict 的 Predictor 默认依赖 commit_history，且 README 要求 predict.db、schema processor/translator 和 prediction 开关；与当前按光标前任意文本查询的 API 不等价。RimeSetInput 最终设置整个 input 并将 caret 放到串尾，不能据此认定与局部 replaceRimeKey 等价。历史记录明确 emoji 未实测启用；未见同词库仅切 grammar 的对照实验。根 LICENSE 与 SDK LICENSE 均为 BSD-3-Clause，app/build.gradle 只包含 arm64-v8a。未重新构建、运行 probe 或操作手机",
+      "lessons": [
+        "九键候选的 comment 是候选读音，不等价于侧栏的所有可选音节，也不能直接替代选音、退格还原和混合编码编辑状态",
+        "插件编译成功不代表行为接入完成：librime-predict 需要预测数据与方案配置，外部光标文本和引擎提交历史还需明确同步策略",
+        "新方案将 qingjinxing 排为「请进行」只证明该样例改善，不能将改进完全归因于 grammar；需固定词库、用户数据等条件做开关对照",
+        "emoji、traditionalization 等 option 同名只说明接口容易保留，必须验证默认值、切方案后恢复和候选实际输出；任意第三方方案也未必支持这些 option",
+        "Go 运行时固定增加 5–15 MB 且不归还内存的表述缺乏本项目实测，不应用作路线选择的定量依据。选择 JNI 的主要理由是现有技术栈、接入范围和已有构建成果",
+        "原项目 BSD-3-Clause 与 Xime GPL-3.0 不是同一许可证；复用 Xime 代码需明确许可安排。16 KB 兼容性需检查最终 ELF、依赖及 APK 打包，不能只以添加一个链接参数作为验收"
+      ],
+      "commits": {}
+    },
     {
       "id": "20260824-02",
       "date": "2026-08-24",
@@ -1191,6 +1244,13 @@
   ],
   "knowledge": {
     "buildEnvironment": {
+      "productionNativeBuild": {
+        "entry": "yuyansdk/native/build_native.py（Gradle preBuild 自动调用）",
+        "sources": "yuyansdk/native/.cache；依赖版本和 SHA256 见 dependencies.lock.json",
+        "requirements": "Python 3.12、PyYAML 6.0.3、NDK 28.2.13676358、CMake 3.31.6",
+        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.0.0_release.apk",
+        "compatibility": "Rime ELF 为 16 KB 对齐；现有 ML Kit digitalink 仍为 4 KB，整包不能宣称兼容 16 KB 设备"
+      },
       "os": "Windows，终端使用 PowerShell",
       "jdk": "仅有 JDK 21（无 17）。项目 Java 目标为 17，CI 使用 17，故本机构建必须对齐 Kotlin jvmTarget",
       "androidSdk": "%LOCALAPPDATA%\\Android\\Sdk，含 platforms android-35/36、build-tools 34.0.0（手动装）与 36.0.0",
@@ -1227,6 +1287,126 @@
     },
     "codeMap": [
       {
+        "path": "yuyansdk/native/rime_jni.cpp",
+        "role": "自有 librime JNI 与用户词库迁移桥接",
+        "notes": "所有入口由 native 互斥锁保护；UTF-16 转换、部署失败通知、字典探测、全局候选下标、独立源目录导出和目标目录导入；预测按宿主给出的上下文查询 PredictDb。"
+      },
+      {
+        "path": "yuyansdk/native/CMakeLists.txt",
+        "role": "Android 原生源码装配",
+        "notes": "固定 arm64 与 Android 23，静态链接依赖到 selfopt_rime，ELF 16 KB 对齐；不使用旧预编译库。"
+      },
+      {
+        "path": "yuyansdk/native/prepare_sources.py",
+        "role": "固定依赖获取与缓存准备",
+        "notes": "按 dependencies.lock.json 的提交获取源码；Boost 下载校验并原子完成，Lua 插件缓存同时记录代码和 thirdparty 版本。"
+      },
+      {
+        "path": "yuyansdk/native/prepare_assets.py",
+        "role": "白霜、雾凇和兼容方案生成",
+        "notes": "保留旧逻辑方案的按键编码，生成 20 个方案、模糊音模板、英文 prism、预测及笔画通配数据；输出稳定 ZIP 与 SHA256 版本。"
+      },
+      {
+        "path": "yuyansdk/native/build_native.py",
+        "role": "原生构建与资源准备入口",
+        "notes": "Gradle 调用；默认使用 native/.cache，编译并 strip 新库，再生成资源包；可显式指定验证用源目录但正常构建不依赖它。"
+      },
+      {
+        "path": "yuyansdk/native/data/selfopt_stroke.lua",
+        "role": "笔画通配翻译器",
+        "notes": "处理 X/x 通配笔画，普通笔画交给 table_translator；按预排序真实字表惰性输出，最多 2000 项。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/EngineRuntime.kt",
+        "role": "主进程引擎部署和状态管理",
+        "notes": "单线程准备词库；准备/就绪/失败状态及重试；暂存迁移后原子启用、版本化部署、保留原库和备份；切方案恢复选项并验证实际字典。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/SchemaRegistry.kt",
+        "role": "逻辑方案与实际方案的集中映射",
+        "notes": "界面继续使用旧方案 ID，映射到 selfopt_frost/selfopt_ice；英文和笔画共用独立方案，未知配置回落全拼。"
+      },
+      {
+        "path": "app/src/androidTest/java/com/yuyan/RimeIntegrationTest.kt",
+        "role": "真实词库/JNI 的 Android 回归",
+        "notes": "11 项测试覆盖输入、方案、编码、候选选择、编辑、预测、开关及失败恢复；不使用模拟引擎。"
+      },
+      {
+        "path": "app/src/debug/java/com/yuyan/ImeTestActivity.kt",
+        "role": "仅调试包中的输入验证宿主",
+        "notes": "提供本地 EditText 供 ADB 验证实际 IME 交互；不进入 Release APK。"
+      },
+      {
+        "path": "app/src/main/java/com/yuyan/BaseApplication.kt",
+        "role": "应用与次进程的 Application 入口",
+        "notes": "所有进程均调用 Launcher；Launcher 必须识别进程，避免手写进程重复打开 Rime 用户词库。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/candidate/CandidateView.kt",
+        "role": "物理键盘候选界面",
+        "notes": "支持引擎状态及重试；视图构造不再重置全局输入模式，迟创建的 EditorInfo 由服务补发。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyPreset.kt",
+        "role": "按键文字与键码预设",
+        "notes": "笔画键使用 H/S/P/N/Z，X 为通配键，后端替换必须保留该可见功能。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardData.kt",
+        "role": "键盘按键排列配置",
+        "notes": "各主题共享笔画、T9、乱序17布局语义，布局常量与后端编码需对应。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/InputSettingsFragment.kt",
+        "role": "输入设置界面",
+        "notes": "新增白霜/雾凇词库选择；保留模糊音入口和 emoji、繁体、双拼设置监听。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/AboutFragment.kt",
+        "role": "应用关于界面",
+        "notes": "源码许可证标注与根 LICENSE 同步为 BSD-3-Clause。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/data/KeyRecordStack.kt",
+        "role": "记录按键、选音和选词操作，并支持退格还原",
+        "notes": "大写字母被识别为 T9Key；pushPinyinSelectAction 依赖旧方案 id 与 T9/LX17 编码逆映射。新九键方案采用数字码时须连同操作记录与恢复逻辑适配"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/T9PinYinUtils.kt",
+        "role": "旧九键方案的拼音与大写字母组编码映射及候选拼音表",
+        "notes": "abc 对应 A、def 对应 D，其余依次为 G/J/M/P/T/W；其职责包括选音和恢复编码，不能仅因候选 comment 带拼音就整体删除"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/application/Launcher.kt",
+        "role": "偏好、主题、数据库、词库复制与引擎初始化入口",
+        "notes": "初始化公共偏好与主题，仅主进程预加载数据库和 EngineRuntime；:hw 不能再次初始化 Rime，否则会争用同一份用户词库。"
+      },
+      {
+        "path": "tmp_rime_jni/librime/src/rime_api.h",
+        "role": "验证工作区中 librime C API 结构与函数定义",
+        "notes": "含输入、全局候选下标选择、当前页候选选择、插入点与整串 set_input；JNI 适配时应明确选词下标、字符串和状态语义"
+      },
+      {
+        "path": "tmp_rime_jni/librime/src/rime_api_impl.h",
+        "role": "验证工作区中 librime C API 的实际实现",
+        "notes": "RimeSetInput 校验会话与 Context 后委托 Context::set_input；不是与旧 replaceRimeKey 相同签名的局部编辑接口"
+      },
+      {
+        "path": "tmp_rime_jni/librime/src/rime/context.cc",
+        "role": "librime 输入上下文、插入点及状态通知实现",
+        "notes": "set_input 覆盖整个输入字符串、将 caret_pos 设置到字符串尾部，再发送更新通知；部分选词后的编辑与恢复效果应通过真实交互确认"
+      },
+      {
+        "path": "tmp_rime_jni/librime-predict/src/predictor.cc",
+        "role": "预测插件的事件监听、触发与预测段创建",
+        "notes": "OnContextUpdate 依赖 prediction 开关、composition 状态及 commit_history，使用最近提交文本触发预测；默认流程不等价于直接查询 Android 光标前任意文本"
+      },
+      {
+        "path": "tmp_rime_jni/device_data/shared/rime_frost_t9.schema.yaml",
+        "role": "此前真机验证使用的白霜九键方案与依赖配置",
+        "notes": "使用数字九键、melt_eng_t9 和专用处理器配置，继承白霜并保留候选拼音 comment；原生候选可用不能直接证明语燕现有九键侧栏与选音可用"
+      },
+      {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
         "role": "输入法服务主类，继承 InputMethodService，是所有系统输入回调的入口",
         "notes": "持有 mInputView（软键盘主视图）与 mCandidateView（物理键盘候选栏）。isSoftKeyboard / isHardwareKeyboard 两个标志由 handleHardwareKeyboard() 统一设置，调用点在 onStartInput 与 onConfigurationChanged。视图为按需创建，状态标志早于视图存在，二者不可互相推断。isSoftKeyboard 在无物理键盘机型上恒为 true，不能用它推断输入法窗口是否可见。onKeyDown/onKeyUp 采用『先交给视图处理，未处理则回落 super』的短路结构，回落时必须调用同方向的基类方法，且同一按键的 DOWN 与 UP 必须保持一致的消费决策"
@@ -1249,17 +1429,17 @@
       {
         "path": "app/build.gradle",
         "role": "应用模块构建配置",
-        "notes": "compileSdk 36 / minSdk 23 / 仅 arm64-v8a；单一渠道 offline；debug 与 release 均使用 signingConfigs.release；versionCode 与 versionName 由构建时间生成（yyyyMMddHH）；产物名在 applicationVariants 中改写"
+        "notes": "应用模块配置：compileSdk/targetSdk 36、minSdk 23、arm64-v8a；版本由根 build.gradle 语义化版本派生；debug/release 使用同一签名配置，新增仅测试所需依赖。"
       },
       {
         "path": "yuyansdk/build.gradle",
         "role": "SDK 库模块构建配置",
-        "notes": "四架构 abiFilters；offline 渠道的 jniLibs.srcDirs 指向 libs；使用 KSP + Room + kotlinx.serialization + viewBinding；BuildConfig 中注入 git HEAD 与构建时间"
+        "notes": "仅构建 arm64-v8a；offline 从 build/generated/rime 加载自编译 JNI 和词库包，preBuild 自动调用 buildRimeNative；使用 KSP + Room + kotlinx.serialization + viewBinding；BuildConfig 中注入 git HEAD 与构建时间"
       },
       {
         "path": ".github/workflows/build.yml",
         "role": "CI 发布流程",
-        "notes": "推送 v* tag 触发，JDK 17，执行 assembleOffline，签名信息全部来自 GitHub Secrets 环境变量（RELEASE_STORE_FILE 等），产物上传至 Release"
+        "notes": "推送 v* tag 触发，JDK 17、Python 3.12、固定 NDK/CMake 与源码缓存，执行 assembleOffline，签名信息来自 GitHub Secrets，产物上传至 Release；selfopt-* 标签不触发该流程，本分支通过 gh 发布已验证的本地 APK"
       },
       {
         "path": "build_mirror.init.gradle",
@@ -1294,12 +1474,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/RimeEngine.kt",
         "role": "Rime 引擎的业务封装，负责按键下发、候选装配、拼音串改写与候选下标映射",
-        "notes": "showCandidates 并非引擎候选的原样呈现：前置自定义短语（customPhraseSize 条，comment 为 📋）、滤除与编码相同的单字母候选、并入模糊音候选，故 rimeIndexMap/fuzzySourceMap 记录每一项对应的引擎下标与来源输入串，选词、翻页都要按其换算。rawInput 记录用户实际按键并与引擎输入严格对应，选词、选拼音后失效（rawInputValid=false）；模糊音补查与拼音编辑都依赖它。editCaret 是拼音编辑的插入点，只记在本侧，引擎自身的插入点始终留在串尾——引擎只翻译其插入点之前的编码，挪到中间候选就只剩前半段。appendFuzzyCandidates 与 getNextPageCandidates 都会改这些共享结构，且后者可能在后台线程调用，二者均加 @Synchronized"
+        "notes": "维护候选下标、按键栈和拼音编辑，入口同步保护。模糊音已进入方案 algebra，不再重放额外输入；注音的空格归一为分词符；中文混输保留英文大小写；联想按展示下标提交。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/FuzzyPinYinUtils.kt",
         "role": "模糊音规则表与变体串生成",
-        "notes": "PRESET 中的键名同时是 AppPrefs 里各开关的 key，增删规则只需改这一处。声母规则按前缀替换、韵母规则按后缀替换，两个方向都试；自定义规则按 from/to 是否为已知声母判断替换方式。variantsOf 先逐个改写单音节（由后往前）再给出整串改写版，按 limit 截断"
+        "notes": "维护模糊音开关与自定义规则，输出 Rime algebra 规则；由 EngineRuntime 放在键位变换之前部署，已移除应用层 variantsOf 重放。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/T9TextContainer.kt",
@@ -1314,12 +1494,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/core/Rime.kt",
         "role": "JNI 声明层，与预编译 libyuyanime.so 的符号一一对应",
-        "notes": "仅 16 个 external 函数，无任何部署（deploy/maintenance）API，这是模糊音无法进引擎的直接原因。其中 replaceRimeKey、getRimeAssociateList、selectRimeAssociate 为上游自加的非标准接口，librime 原生没有——联想那两个可由 librime-predict 插件替代。包名与符号硬绑定，不得改名"
+        "notes": "Kotlin JNI 接口保持 core 类名与数据构造约定，加载自编译 selfopt_rime。包装层检查 EngineRuntime 就绪状态；逻辑方案由注册表维护，联想原始数组可空并在包装层回落为空数组。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/core/Kernel.kt",
         "role": "引擎门面，向上层暴露输入、候选、配置刷新",
-        "notes": "nativeUpdateImeOption 只设两个 Rime option：traditionalization 与 emoji。这两个名字是 Rime 生态通用惯例（白霜、雾凇的 switches 同名，opencc 配置也同为 s2t.json/emoji.json），换任何主流方案都不必改动"
+        "notes": "界面使用的引擎门面，向 RimeEngine 转发输入、候选和配置；模糊音由 EngineRuntime 部署处理，emoji 与繁体选项在切方案后恢复。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/DoublePinYinUtils.kt",
@@ -1329,17 +1509,17 @@
     ],
     "constraints": [
       "版本号唯一来源为根 build.gradle 的 ext 块（versionMajor/versionMinor/versionPatch），禁止在其他文件硬编码版本号；递增规则见 CLAUDE.md「版本号规范」",
-      "com.yuyan.inputmethod.core 包内的类名、包名、字段名与预编译 .so 的 JNI 符号硬绑定，严禁重命名或移动",
+      "com.yuyan.inputmethod.core 与自有 native/rime_jni.cpp 的 JNI 名称和构造约定绑定，严禁单侧重命名或移动；旧 libyuyanime.so 已退出打包",
       "提交信息不得包含任何 AI 工具署名，提交身份统一为 daqiangganjun",
       "yuyansdk 为独立 git 子模块（remote: git@github.com:daqiangganjun/yuyansdk.git），其内改动需在子模块内单独提交，再在主仓库提交指针更新",
-      "libyuyanime.so 的 JNI_OnLoad 会 FindClass(kotlin/Pair)，混淆时必须 -keep class kotlin.Pair，否则 native 库加载即 SIGABRT",
+      "历史闭源 libyuyanime.so 的 JNI_OnLoad 需要保留 kotlin.Pair；5.0.0 已不加载该库，自有 JNI 的混淆保留规则应按 native/rime_jni.cpp 的实际类名与字段维护",
       "com.google.android.datatransport:transport-backend-cct 不可从依赖中排除，ML Kit 初始化时会强制实例化 CCTDestination；遥测的阻断方式是在 manifest 中移除其调度组件",
       "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*",
       "注音一律经 PolyphoneReading，禁止直接调用 PinyinHelper.toHanYuPinyinMulti——后者会输出古音与罕用音",
       "反射访问 androidx 私有字段（RecyclerView$ViewHolder.itemView、Preference.mDefaultValue）依赖 proguard.cfg 中的 keep 规则，升级依赖或新增此类反射时必须同步维护",
-      "Rime 方案的 speller/algebra 在设备上无法更改：assets/rime 下只有编译产物，方案 yaml 以 compiled_config 形式内嵌于 libyuyanime.so，没有源文件可供 deploy 重建 prism。模糊音一类需改 algebra 的能力只能在输入串层面另行实现。注：该约束仅针对当前预编译 .so，自编译 librime 已实测可解除（见 20260824-01）",
+      "5.0.0 随 APK 分发方案与词典源文件，可在设备上重新部署 speller/algebra；EngineRuntime 负责模糊音模板替换和部署。基础词库仍由电脑按固定提交生成，应用尚无 Git 来源管理或在线词库更新入口",
       "候选列表为空等同于本轮输入结束，任何对候选的过滤都必须保证不把列表滤空",
-      "改动 showCandidates 的组成（增删、重排、并入其它来源）时必须同步维护 RimeEngine 中的 rimeIndexMap/fuzzySourceMap，否则选词会取到错误的引擎下标",
+      "改动 showCandidates 的组成（增删、重排、并入其它来源）时必须同步维护 RimeEngine 的 rimeIndexMap，否则选词会取到错误的引擎下标；5.0.0 已删除应用层模糊音重放及 fuzzySourceMap",
       "拼音编辑不得移动引擎自身的插入点：librime 只翻译插入点之前的编码，挪到中间会让候选只剩前半段。插入点记在 RimeEngine.editCaret，编辑后整串同步给引擎",
       "不得替换已交给 RecyclerView 管理的 itemView 的 layoutParams 类型（含 header/footer）：RecyclerView 会将其强转为 RecyclerView.LayoutParams，改尺寸只能原地改字段",
       "「移到行首/行末」用 MOVE_HOME/MOVE_END 按键而非 setSelection，前者才会让宿主把光标滚进可视区；能用 InputConnection 完成的编辑操作不要走 performContextMenuAction，后者会惊动宿主选择态、连续调用可能导致失焦收起键盘",

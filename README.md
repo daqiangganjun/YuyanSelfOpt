@@ -100,7 +100,14 @@ sdk.dir=C\:\\Users\\<用户名>\\AppData\\Local\\Android\\Sdk
 | Platform android-36 | 对应 `compileSdk 36` |
 | Build-Tools 34.0.0 | AGP 8.3.2 的默认版本，**必需** |
 | Build-Tools 36.0.0 | 可选，用于 `apksigner`、`aapt2` 等验证工具 |
-| NDK / CMake | **不需要**，`yuyansdk/libs` 下为预编译 `.so` |
+| NDK 28.2.13676358 / CMake 3.31.6 | 编译开源 librime 与本项目 JNI，版本固定在 `yuyansdk/native/dependencies.lock.json` |
+| Python 3.12 与 PyYAML | 准备固定版本源码、生成白霜与雾凇方案包 |
+
+首次构建前安装 Python 构建依赖：
+```powershell
+python -m pip install -r .\yuyansdk\native\requirements.txt
+```
+Gradle 的 `buildRimeNative` 任务会自动获取锁定版本的源码、校验 Boost 压缩包并编译 `libselfopt_rime.so`。源码缓存位于 `yuyansdk/native/.cache/`，生成的动态库与词库包位于 `yuyansdk/build/generated/rime/`；均不入库。首次构建需要能够访问 GitHub 的 HTTPS 连接，后续构建复用本地缓存，不依赖 `tmp_rime_jni/`。
 
 Gradle 会尝试自动安装缺失的 Build-Tools 34.0.0，但该过程走 `dl.google.com` 且不遵循 init script 中的镜像配置，国内网络下会长时间挂起直至失败。建议手动安装：
 ```sh
@@ -163,7 +170,13 @@ app/build/outputs/apk/offline/release/yuyanSelfOpt_<versionName>_release.apk
 # 安装到设备
 adb install -r <apk路径>
 ```
-构建产物仅包含 `arm64-v8a`（见 `app/build.gradle` 的 `abiFilters`），不支持 32 位设备与模拟器 x86 镜像。
+构建产物仅包含 `arm64-v8a`（见 `app/build.gradle` 的 `abiFilters`），不支持 32 位设备；x86 模拟器需要支持 ARM64 二进制转换。
+
+从 5.0.0 起，APK 使用自行构建的 `libselfopt_rime.so`，不再打包旧 `libyuyanime.so` 及其预编译词库。默认使用白霜，可在「输入设置 → 拼音词库」切换为雾凇；全拼、九键和双拼共用相应的用户词库，模糊音通过方案重新部署生效。
+
+首次启动及修改模糊音时会在后台准备词库，键盘会显示准备状态，失败后可点击重试。覆盖安装相同包名、相同签名的 APK 会保留原设置；首次升级会备份旧 `pinyin.userdb`、`english.userdb`、`stroke.userdb`，通过 librime 文本导入导出迁移学习记录，再一次性启用新用户目录。旧词库保留在原位置，备份与新用户词库保存在应用内部的 `files/rime-selfopt/`。请使用覆盖安装完成升级，卸载会删除应用数据。
+
+新 Rime 库按 16 KB ELF 对齐构建；现有 ML Kit 手写库 `libdigitalink.so` 仍为 4 KB 对齐，因此不能将整包视为已经完成 16 KB 设备兼容。相关依赖的许可证随词库包中的 `licenses/` 一同分发。
 
 ### 常见构建问题
 | 现象 | 原因与处理 |
