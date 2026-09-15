@@ -3,6 +3,30 @@
   "updatedAt": "2026-09-15",
   "entries": [
     {
+      "id": "20260915-02",
+      "date": "2026-09-15",
+      "type": "chore",
+      "title": "提交推送并正式发行 5.0.0",
+      "trigger": "用户要求先对当前 5.0.0 版本提交、推送及发行",
+      "rootCause": "已验证的 5.0.0 实现尚未提交推送，需先使 SDK 提交可从远端获取，再发布对应主仓库标签与同一份 APK",
+      "solution": "以 daqiangganjun 身份和中文信息提交 SDK c73cf2e，再提交主仓库 59c5ec4 并依次推送 master；创建指向主仓库实现提交的注释标签 selfopt-v5.0.0。通过 gh 创建发行草稿，上传此前通过验证的 yuyanSelfOpt_5.0.0_release.apk，核对远端摘要和发行正文后于北京时间 2026-09-15 13:35:44 正式发布并设为 Latest。发行说明明确白霜/雾凇已内置、首次部署不下载拼音词库、基础词库随 APK 更新、用户词库迁移流程及 16 KB 兼容限制。补齐实现和评审记录的提交引用，修正开发知识中 SDK 架构、资源入口、CI 触发与旧引擎约束的过时描述",
+      "changedFiles": [
+        {
+          "path": "change_log.md",
+          "notes": "新增发行索引并补齐 5.0.0 实现、方案评审的提交引用"
+        },
+        {
+          "path": "change_details.json",
+          "notes": "记录发行结果、标签、已发布产物及校验依据，同步现行构建与引擎约束"
+        }
+      ],
+      "verification": "发布前核对已有日志：BUILD SUCCESSFUL，instrumentation_delivery.txt 为 OK (11 tests)，耗时 74.078 秒；未重复运行功能测试或重新构建。重新执行 apksigner 验签及 APK ZIP CRC 检查通过，确认含 libselfopt_rime.so 且不含旧 libyuyanime.so 或 assets/rime/。GitHub 发行附件状态 uploaded，大小 70663933 字节，digest 为 sha256:76275acc558083ff40de52fdfe7c6f22e223381a079bc2d7d61f298d850e252f，与本地一致；远端发行正文与准备的正文一致。发布后 GitHub 确认 isDraft=false、isPrerelease=false，releases/latest 指向 selfopt-v5.0.0。发行地址：https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.0.0",
+      "commits": {
+        "main": "59c5ec4b58f26feff96e4b14793a42ecb9578a0c",
+        "yuyansdk": "c73cf2e9b2dc7eba3c05697f5de2148c1b0cd269"
+      }
+    },
+    {
       "id": "20260915-01",
       "date": "2026-09-15",
       "type": "feat",
@@ -30,7 +54,10 @@
         "JNI 字符串采用 UTF-16 边界转换并及时释放引用/引擎结果，不能把含 emoji 的普通 UTF-8 直接交给 NewStringUTF",
         "联网核对资料：Android JNI tips https://developer.android.com/ndk/guides/jni-tips；16 KB 文档 https://developer.android.com/guide/practices/page-sizes；T9 部分选词讨论 https://github.com/rime/librime/issues/1122；预测插件 https://github.com/rime/librime-predict；Boost 官方 Release 的 cmake.tar.xz 下载地址与 SHA256"
       ],
-      "commits": {}
+      "commits": {
+        "main": "59c5ec4b58f26feff96e4b14793a42ecb9578a0c",
+        "yuyansdk": "c73cf2e9b2dc7eba3c05697f5de2148c1b0cd269"
+      }
     },
     {
       "id": "20260914-02",
@@ -53,7 +80,9 @@
         "Go 运行时固定增加 5–15 MB 且不归还内存的表述缺乏本项目实测，不应用作路线选择的定量依据。选择 JNI 的主要理由是现有技术栈、接入范围和已有构建成果",
         "原项目 BSD-3-Clause 与 Xime GPL-3.0 不是同一许可证；复用 Xime 代码需明确许可安排。16 KB 兼容性需检查最终 ELF、依赖及 APK 打包，不能只以添加一个链接参数作为验收"
       ],
-      "commits": {}
+      "commits": {
+        "main": "59c5ec4b58f26feff96e4b14793a42ecb9578a0c"
+      }
     },
     {
       "id": "20260824-02",
