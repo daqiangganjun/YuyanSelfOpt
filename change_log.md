@@ -4,11 +4,17 @@
 
 ## 2026-10-30
 
+### `20261030-02` chore：提交推送并正式发行 5.0.3
+
+依次提交推送 SDK 与主仓库，从已提交源码构建最终 Release APK，创建 `selfopt-v5.0.3` 并发布为最新版，涵盖中文原文上屏、系统底栏与 16 KB 兼容改进。
+最终包版本、构建哈希、验签、ZIP 完整性和 16 KB ZIP 对齐检查通过；远端附件大小与 SHA256 和本地一致，发行说明包含最终校验值。
+关联提交：主仓库 `70dce57`、SDK `5a08240`；影响文件：`change_log.md`、`change_details.json`；发行：https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.0.3。
+
 ### `20261030-01` fix：保留中文模式下未匹配的字母串，回车直接上屏，版本 5.0.3
 
 中文模式输入 `ippure` 时，`ipp` 无候选导致整轮输入被清空，回车随后被转发给应用；无匹配时保留完整原文候选，并支持直接选中上屏。
 13 项真实词库回归及 Debug/Release 构建通过；触屏验证完整预览与回车原文上屏，键盘保持展开；Release 验签和对齐检查通过。
-关联提交：尚未提交；影响文件：`RimeEngine.kt`、`RimeIntegrationTest.kt`、版本号、`README.md` 与开发记录。
+关联提交：主仓库 `70dce57`、SDK `5a08240`；影响文件：`RimeEngine.kt`、`RimeIntegrationTest.kt`、版本号、`README.md` 与开发记录。
 
 ## 2026-10-29
 
@@ -16,7 +22,7 @@
 
 雷电 14 的选择窗口和 `ime set` 均未实际改变默认输入法；直接写入系统默认输入法设置后，语燕成功选中并绑定。
 重新打开应用、切换到系统设置并实际触屏输入与候选上屏「你好」均通过；应用代码和版本号未变，记录模拟器侧恢复命令。
-关联提交：尚未提交；影响文件：`README.md`、`change_log.md`、`change_details.json`；模拟器仅调整默认输入法。
+关联提交：主仓库 `70dce57`；影响文件：`README.md`、`change_log.md`、`change_details.json`；模拟器仅调整默认输入法。
 
 ## 2026-10-28
 
@@ -24,13 +30,13 @@
 
 联网核对 Android 官方文档与 AOSP 输入法导航栏实现，移除主动隐藏导航栏的行为，跟随系统边距与主题明暗；额外功能改名「底部快捷栏」并默认关闭，保留已有明确选择。
 手势/三键导航、横竖屏、浅深主题、系统按钮及实际候选上屏已在 16 KB 模拟器验证；最终 APK/AAB 构建、16 KB 对齐与验签通过，覆盖升级保留显式选择，Release 手写上屏通过。
-关联提交：尚未提交；影响文件：`InputView.kt`、`AppPrefs.kt`、`EnvironmentSingleton.kt`、底栏名称与注释、版本号、既有 README 与开发记录。
+关联提交：主仓库 `70dce57`、SDK `5a08240`；影响文件：`InputView.kt`、`AppPrefs.kt`、`EnvironmentSingleton.kt`、底栏名称与注释、版本号、既有 README 与开发记录。
 
 ### `20261028-01` fix：升级手写依赖与构建工具链，修复 16 KB 对齐，版本 5.0.1
 
 ML Kit 升级至 19.0.0 并迁移手写 API；统一 AGP、Gradle、Kotlin、KSP 与序列化插件，修复 DAO 泛型签名兼容问题，保留手写进程隔离及数据库结构。
 Debug、Release、测试 APK 与 AAB 构建及全部对齐检查通过；Android 15 的 16 KB 页面模拟器完成 13 项集成回归，Release 包实际手写识别与候选上屏通过；尚未验证 16 KB 真机。
-关联提交：尚未提交；影响文件：构建配置、手写 API 引用、`BaseDao.kt`、`RuntimeCompatibilityTest.kt`、既有 README 与开发记录。
+关联提交：主仓库 `70dce57`、SDK `5a08240`；影响文件：构建配置、手写 API 引用、`BaseDao.kt`、`RuntimeCompatibilityTest.kt`、既有 README 与开发记录。
 
 ## 2026-09-15
 

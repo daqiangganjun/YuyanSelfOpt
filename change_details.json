@@ -3,6 +3,34 @@
   "updatedAt": "2026-10-30",
   "entries": [
     {
+      "id": "20261030-02",
+      "date": "2026-10-30",
+      "type": "chore",
+      "title": "提交推送并正式发行 5.0.3",
+      "trigger": "用户要求将已修复的版本推送到 GitHub Release",
+      "rootCause": "远端最新版本仍为 5.0.0，5.0.1 的 16 KB 兼容、5.0.2 的系统底栏和本轮原文上屏修复均尚未提交发布；当前默认 Git SSH 客户端无法使用 Windows agent，而旧文档中的 OpenSSH 安装目录已不存在",
+      "solution": "将两个仓库的本地 core.sshCommand 指向当前 C:/Windows/System32/OpenSSH/ssh.exe，验证双方远端 master 与本地一致后，先提交推送 SDK，再提交推送主仓库。从干净源码提交 70dce57 重建最终发布包，创建并推送附注标签 selfopt-v5.0.3；先创建 Release 草稿并上传 APK，核对远端摘要后发布为正式最新版，发行标题为「语燕 SelfOpt 5.0.3」",
+      "changedFiles": [
+        {
+          "path": "change_log.md、change_details.json",
+          "notes": "记录发行结果与最终产物校验值，补齐本轮及此前累计变更的源码提交关联"
+        },
+        {
+          "path": "CLAUDE.md、主仓库及 SDK 的本地 Git 配置",
+          "notes": "更新 Windows SSH 入口；CLAUDE.md 是既有忽略文件，仅在本机同步，不强制加入版本控制"
+        }
+      ],
+      "verification": "主仓库源码提交 70dce573dc8f31a2248eaea9436eef9fe824a13c 引用 SDK 5a08240a7c06e04eb81d8ebca4ac2e69ada8b5e8，两者已按依赖顺序推送。最终 :app:assembleOfflineRelease 构建成功，耗时 3m 45s；生成的 BuildConfig.AppCommitHead 与发行标签的源码提交一致，APK versionName=5.0.3、versionCode=50003。最终 APK 验签、ZIP CRC 及 zipalign -c -P 16 4 检查通过，大小 66661406 字节，SHA256=8541a7030a99b25fd95e7244a5e78659efa6c4ac71eea645c30dc60ea194e4f4。草稿附件上传后，通过 GitHub API 核对 size、state=uploaded 和 digest 与本地一致，再发布为最新版；发布后 latest API 返回 selfopt-v5.0.3、draft=false、prerelease=false，附件摘要未变。Release ID=428712060，附件 ID=691169854。功能验证沿用同一功能源码的 13 项真实词库回归与实际触屏预览、回车上屏结果；重建仅同步已提交源码的构建信息。证据位于 tmp_release_5.0.3_20261030，发行地址 https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.0.3",
+      "lessons": [
+        "Windows 升级或环境变化后，应核对实际 ssh-agent 服务路径，再为 Git 指定可使用同一 agent 的 SSH 客户端；默认 Git Bash 客户端的 publickey 失败不能直接说明密钥失效",
+        "正式发布前从已提交源码构建，让包内构建哈希对应发行标签；重新构建会改变 APK 摘要，发行说明及远端校验必须使用最终产物"
+      ],
+      "commits": {
+        "main": "70dce573dc8f31a2248eaea9436eef9fe824a13c",
+        "yuyansdk": "5a08240a7c06e04eb81d8ebca4ac2e69ada8b5e8"
+      }
+    },
+    {
       "id": "20261030-01",
       "date": "2026-10-30",
       "type": "fix",
@@ -24,13 +52,13 @@
           "notes": "修订版本号、补充中文模式原文回车输入说明，同步开发记录、代码职责及当前 Windows SSH 入口"
         }
       ],
-      "verification": "修复前同一测试 APK 的两项新增回归均失败，逐字输入在 ipp 处明确触发空候选断言；修复后 RimeIntegrationTest 全部 13 项通过。Debug、测试 APK 和 Release 构建成功；模拟器实际触屏全拼输入 ippure，截图确认完整拼音气泡及原文候选，触屏回车后布局断言输入框严格等于 ippure、无附加换行，dumpsys 确认 mInputShown=true。Release APK 签名及 zipalign -c -P 16 4 检查通过，SHA256 为 1B338D0EAF01A249AE37AEC2F51F4EA7E1AEE67DAD7F05358007CE6EB19E153E。验证后恢复原默认输入法与调试包偏好；未覆盖安装既有 Release 应用。证据位于 tmp_unmatched_pinyin_20261030；未提交、推送或发布",
+      "verification": "修复前同一测试 APK 的两项新增回归均失败，逐字输入在 ipp 处明确触发空候选断言；修复后 RimeIntegrationTest 全部 13 项通过。Debug、测试 APK 和 Release 构建成功；模拟器实际触屏全拼输入 ippure，截图确认完整拼音气泡及原文候选，触屏回车后布局断言输入框严格等于 ippure、无附加换行，dumpsys 确认 mInputShown=true。Release APK 签名及 zipalign -c -P 16 4 检查通过，SHA256 为 1B338D0EAF01A249AE37AEC2F51F4EA7E1AEE67DAD7F05358007CE6EB19E153E。验证后恢复原默认输入法与调试包偏好；未覆盖安装既有 Release 应用。证据位于 tmp_unmatched_pinyin_20261030；上述为提交前验证，最终发行见 20261030-02",
       "lessons": [
         "中文拼音可能暂时没有任何词库匹配，但组合文本仍然有效；当前界面以候选列表决定输入是否结束，必须为这类输入保留原文候选",
         "应用补充的原文候选没有对应的 librime 下标，必须通过独立映射标记直接提交，避免误选词库候选"
       ],
       "commits": {
-        "main": null,
+        "main": "70dce573dc8f31a2248eaea9436eef9fe824a13c",
         "yuyansdk": "5a08240a7c06e04eb81d8ebca4ac2e69ada8b5e8"
       }
     },
@@ -59,7 +87,7 @@
         "当前环境 Android CLI layout 进程异常时，可使用 adb uiautomator dump 到设备临时文件后读取 XML；截图仍可通过 Android CLI 获取"
       ],
       "commits": {
-        "main": null,
+        "main": "70dce573dc8f31a2248eaea9436eef9fe824a13c",
         "yuyansdk": null
       }
     },
@@ -103,8 +131,8 @@
         "三键导航模式切换期间需等待系统界面稳定后验证图标明暗，不能仅依据过渡帧判定主题适配失败"
       ],
       "commits": {
-        "main": null,
-        "yuyansdk": null
+        "main": "70dce573dc8f31a2248eaea9436eef9fe824a13c",
+        "yuyansdk": "5a08240a7c06e04eb81d8ebca4ac2e69ada8b5e8"
       }
     },
     {
@@ -146,8 +174,8 @@
         "启用物理键盘的模拟器上，系统强制显示软键盘与应用自身的物理键盘模式可能不一致；触屏回归应使用应用已有的「物理键盘显示软键盘」选项，避免落入仅候选栏可触摸的硬件键盘分支；无需修改产品代码"
       ],
       "commits": {
-        "main": null,
-        "yuyansdk": null
+        "main": "70dce573dc8f31a2248eaea9436eef9fe824a13c",
+        "yuyansdk": "5a08240a7c06e04eb81d8ebca4ac2e69ada8b5e8"
       }
     },
     {
