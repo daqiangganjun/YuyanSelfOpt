@@ -18,11 +18,4 @@ settingsEvaluated { settings ->
 allprojects { project ->
     buildscript { applyMirrors(repositories) }
     applyMirrors(project.repositories)
-
-    // 本机仅有 JDK 21，项目 Java 编译目标为 17，此处对齐 Kotlin/KSP 的 jvmTarget
-    project.tasks.configureEach { task ->
-        if (task.class.name.contains('KotlinCompile') || task.class.name.contains('KspTask')) {
-            task.kotlinOptions.jvmTarget = '17'
-        }
-    }
 }

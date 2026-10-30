@@ -10,6 +10,7 @@ import com.yuyan.inputmethod.RimeEngine
 import com.yuyan.inputmethod.SchemaRegistry
 import com.yuyan.inputmethod.core.Rime
 import com.yuyan.inputmethod.util.LX17PinYinUtils
+import com.yuyan.imemodule.service.DecodingInfo
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -171,6 +172,46 @@ class RimeIntegrationTest {
             RimeEngine.onNormalKey(KeyEvent(0, 0, KeyEvent.ACTION_UP,
                 KeyEvent.KEYCODE_A + char.lowercaseChar().code - 'a'.code, 0, meta))
         }
+    }
+
+    @Test
+    fun unmatchedPinyinKeepsWholeInputForEnter() {
+        for (family in listOf("frost", "ice")) {
+            setPreference("rime_dictionary_family", family)
+            instrumentation.runOnMainSync {
+                RimeEngine.selectSchema("pinyin")
+                DecodingInfo.reset()
+                "ippure".forEachIndexed { index, char ->
+                    DecodingInfo.inputAction(KeyEvent(KeyEvent.ACTION_UP,
+                        KeyEvent.KEYCODE_A + char.code - 'a'.code))
+                    DecodingInfo.updateDecodingCandidate()
+                    val expected = "ippure".take(index + 1)
+                    assertFalse("Unmatched input must retain a literal candidate: $expected",
+                        DecodingInfo.isCandidatesEmpty)
+                    assertEquals(expected, Rime.getRawInput())
+                    assertEquals(expected, DecodingInfo.composingStrForDisplay.replace("'", ""))
+                    assertEquals(expected, DecodingInfo.composingStrForCommit)
+                }
+                DecodingInfo.reset()
+            }
+        }
+    }
+
+    @Test
+    fun unmatchedPinyinSupportsDeletionAndLiteralSelection() {
+        RimeEngine.selectSchema("pinyin")
+        typeKeys("ippure")
+        repeat(2) { RimeEngine.onDeleteKey() }
+        assertEquals("ippu", Rime.getRawInput())
+        assertEquals("ippu", RimeEngine.showComposition.replace("'", ""))
+        typeKeys("re")
+        val index = RimeEngine.showCandidates.indexOfFirst { it.text == "ippure" }
+        assertTrue("Expected the unmatched input as a literal candidate", index >= 0)
+        assertEquals("ippure", RimeEngine.selectCandidate(index))
+        assertEquals("ippure", RimeEngine.preCommitText)
+        assertTrue(RimeEngine.isFinish())
+        assertEquals("", Rime.getRawInput())
+        assertTrue(RimeEngine.showCandidates.isEmpty())
     }
 
     @Test

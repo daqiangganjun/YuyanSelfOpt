@@ -47,7 +47,7 @@
 
 ## 实现功能：
 + 方案内置：全拼（九宫格、全键）、双拼(小鹤、智能ABC、自然码、紫光、微软、搜狗、乱序17)、手写、五笔画；支持简拼、全拼；
-+ 英文输入：智能全键英文输入；
++ 英文输入：智能全键英文输入；中文模式下无匹配的字母串保留完整预览，按回车直接上屏；
 + 词库拓展：支持雾凇词库、白霜词库等多种词库拓展，输入体验良好；
 + 符号输入：中文、英文、数学、颜文字、EMOJI表情输入、微信特效表情；
 + 数字输入：数字键盘输入、键盘数字行输入； 
@@ -58,8 +58,10 @@
 + 拼音输入扩展：支持繁体、简体，支持中英文混输，支持表情描述输入；
 + 剪切板：支持剪切板联想显示、剪切板及清空操作；
 + 常用语：支持自定义常用语、常用语快捷输入、编辑、删除等操作；
-+ 全面屏键盘优化：支持全面屏键盘优化导航栏功能；
++ 底部快捷栏：默认使用系统底栏，可选增加输入法切换、剪贴板、常用语和滑动光标功能；
 + 隐藏输入法图标：支持隐藏输入法图标功能。
+
+从 5.0.2 起，默认使用系统底栏，不主动隐藏系统导航栏；原「全面屏键盘优化」更名为「底部快捷栏」，可按需增加快捷按钮和滑动光标功能。已保存的快捷栏选择在升级时保留，未配置用户使用新的默认值。系统底栏的按钮样式及输入法切换入口取决于系统、导航方式和已启用的输入法数量。
 
 ## 已知问题：
 * 小米手机中键盘菜单点击设置等无反应:  
@@ -98,8 +100,7 @@ sdk.dir=C\:\\Users\\<用户名>\\AppData\\Local\\Android\\Sdk
 | 组件 | 说明 |
 |---|---|
 | Platform android-36 | 对应 `compileSdk 36` |
-| Build-Tools 34.0.0 | AGP 8.3.2 的默认版本，**必需** |
-| Build-Tools 36.0.0 | 可选，用于 `apksigner`、`aapt2` 等验证工具 |
+| Build-Tools 36.0.0 | 两个模块显式指定的构建版本，也用于 `apksigner`、`aapt2`、`zipalign` 验证 |
 | NDK 28.2.13676358 / CMake 3.31.6 | 编译开源 librime 与本项目 JNI，版本固定在 `yuyansdk/native/dependencies.lock.json` |
 | Python 3.12 与 PyYAML | 准备固定版本源码、生成白霜与雾凇方案包 |
 
@@ -109,11 +110,9 @@ python -m pip install -r .\yuyansdk\native\requirements.txt
 ```
 Gradle 的 `buildRimeNative` 任务会自动获取锁定版本的源码、校验 Boost 压缩包并编译 `libselfopt_rime.so`。源码缓存位于 `yuyansdk/native/.cache/`，生成的动态库与词库包位于 `yuyansdk/build/generated/rime/`；均不入库。首次构建需要能够访问 GitHub 的 HTTPS 连接，后续构建复用本地缓存，不依赖 `tmp_rime_jni/`。
 
-Gradle 会尝试自动安装缺失的 Build-Tools 34.0.0，但该过程走 `dl.google.com` 且不遵循 init script 中的镜像配置，国内网络下会长时间挂起直至失败。建议手动安装：
-```sh
-curl -L -x socks5://127.0.0.1:10808 -o build-tools_r34-windows.zip \
-  https://dl.google.com/android/repository/build-tools_r34-windows.zip
-# 解压后将其中的 android-14 目录重命名为 34.0.0，放入 <SDK>/build-tools/
+构建工具链固定为 AGP 8.11.1、Gradle 8.14.3、Kotlin 2.2.21 与 KSP 2.2.21-2.0.5，Java/Kotlin 编译目标均为 JVM 17。Gradle 会尝试自动安装缺失的 Build-Tools，但该过程走 `dl.google.com` 且不遵循 init script 中的镜像配置；国内网络下可通过 SDK Manager 指定 HTTP 代理安装：
+```powershell
+& '<SDK>/cmdline-tools/latest/bin/sdkmanager.bat' 'build-tools;36.0.0' --proxy=http --proxy_host=127.0.0.1 --proxy_port=10808
 ```
 
 ### 3. 生成签名文件并配置
@@ -135,12 +134,9 @@ keyPassword=<你的密码>
 ```
 
 ### 4. 构建辅助脚本 build_mirror.init.gradle
-仓库根目录的 `build_mirror.init.gradle` 是一个 Gradle init script，用于在**不修改项目任何构建脚本**的前提下解决两个本地环境问题：
+仓库根目录的 `build_mirror.init.gradle` 是一个 Gradle init script，将 `mavenCentral()`、`google()`、`gradlePluginPortal()` 重定向至阿里云镜像，解决国内网络下的依赖下载问题。Java/Kotlin 的 JVM 17 编译目标已直接声明在两个模块中，无需依靠本机脚本对齐。
 
-1. **依赖下载**：将 `mavenCentral()`、`google()`、`gradlePluginPortal()` 全部重定向至阿里云镜像。直连 `dl.google.com` 在国内网络下极易超时，实测无镜像时下载 AGP 依赖失败耗时超过 10 分钟；使用镜像后单个构件响应稳定在 0.3 秒内。
-2. **JVM target 对齐**：项目 `compileOptions` 指定 Java 17，而 JDK 21 环境下 Kotlin/KSP 默认取 jvmTarget 21，会触发 `Inconsistent JVM-target compatibility` 构建失败。脚本统一将 Kotlin 与 KSP 任务的 `jvmTarget` 设为 17。
-
-若你使用 JDK 17 且网络通畅，可省略该脚本。
+网络通畅时可省略该脚本。
 
 ### 5. 执行构建
 ```sh
@@ -167,6 +163,9 @@ app/build/outputs/apk/offline/release/yuyanSelfOpt_<versionName>_release.apk
 # 查看包信息与 ABI
 <SDK>/build-tools/36.0.0/aapt2.exe dump badging <apk路径>
 
+# 校验 APK 中未压缩原生库的 16 KB ZIP 对齐
+<SDK>/build-tools/36.0.0/zipalign.exe -c -P 16 4 <apk路径>
+
 # 安装到设备
 adb install -r <apk路径>
 ```
@@ -176,17 +175,25 @@ adb install -r <apk路径>
 
 首次启动及修改模糊音时会在后台准备词库，键盘会显示准备状态，失败后可点击重试。覆盖安装相同包名、相同签名的 APK 会保留原设置；首次升级会备份旧 `pinyin.userdb`、`english.userdb`、`stroke.userdb`，通过 librime 文本导入导出迁移学习记录，再一次性启用新用户目录。旧词库保留在原位置，备份与新用户词库保存在应用内部的 `files/rime-selfopt/`。请使用覆盖安装完成升级，卸载会删除应用数据。
 
-新 Rime 库按 16 KB ELF 对齐构建；现有 ML Kit 手写库 `libdigitalink.so` 仍为 4 KB 对齐，因此不能将整包视为已经完成 16 KB 设备兼容。相关依赖的许可证随词库包中的 `licenses/` 一同分发。
+从 5.0.1 起，ML Kit 手写识别升级至 19.0.0，`libdigitalink.so` 与自编译的 `libselfopt_rime.so` 均满足 16 KB ELF 对齐要求；Debug/Release APK 中的原生库采用 16 KB ZIP 对齐，Release AAB 配置为 `PAGE_ALIGNMENT_16K`。手写识别仍隔离在 `:hw` 进程中。相关依赖的许可证随词库包中的 `licenses/` 一同分发。
+
+已在支持 ARM64 转换的 Android 15、16 KB 页面 x86_64 模拟器上通过 13 项集成回归，并验证 Release 包触屏手写识别及候选上屏；尚未在 16 KB 真机上验证。
+
+集成回归使用真实词库、数据库与手写服务。安装 Debug APK 和测试 APK 后，可在设备上执行：
+```powershell
+adb shell getconf PAGE_SIZE
+adb shell am instrument -w -e require16Kb true -e downloadHandwritingModel true com.yuyan.selfopt.offline.debug.test/androidx.test.runner.AndroidJUnitRunner
+```
+`require16Kb=true` 要求新增回归运行在 16 KB 页面环境；普通 4 KB 设备上应省略此参数。手写模型未下载时，默认跳过识别回归；显式传入 `downloadHandwritingModel=true` 允许首次联网下载，再验证离线识别及手写进程重启后的模型复用。测试 APK 通过 `:app:assembleOfflineDebugAndroidTest` 构建，路径为 `app/build/outputs/apk/androidTest/offline/debug/app-offline-debug-androidTest.apk`。
 
 ### 常见构建问题
 | 现象 | 原因与处理 |
 |---|---|
-| `Could not download gradle-8.3.2.jar` | 未使用镜像 init script，或代理不可达 |
-| `Failed to install build-tools;34.0.0` | Gradle 自动安装走 `dl.google.com`，参照步骤 2 手动安装 |
-| `Inconsistent JVM-target compatibility (17 / 21)` | 使用了 JDK 21 但未加载 init script |
+| `Could not download gradle-8.11.1.jar` | 未使用镜像 init script，或代理不可达 |
+| `Failed to install build-tools;36.0.0` | Gradle 自动安装走 `dl.google.com`，参照步骤 2 手动安装 |
 | `Can't connect to SOCKS proxy: Network is unreachable` | Java 的 `-DsocksProxyHost` 与仅监听 IPv6 的代理不兼容，改用镜像方案 |
 | `SDK XML versions up to 3 ... version 4 was encountered` | 无害警告，AGP 与 cmdline-tools 版本不一致所致，可忽略 |
-| `AGP 8.3.2 was tested up to compileSdk = 34` | 无害警告，实测 compileSdk 36 可正常构建 |
+| 雷电模拟器中选择语燕无效，`ime set` 报成功但仍为内置输入法 | 已在雷电 14 验证：`adb -s <设备标识> shell settings put secure default_input_method com.yuyan.selfopt.offline.release/com.yuyan.imemodule.service.ImeService`；再查询 `settings get secure default_input_method` 并实际输入验证。Debug 包应将包名末尾改为 `.debug` |
 
 ## 键盘预览：
 | 九宫键盘 | 全拼键盘 | 乱序17 |
