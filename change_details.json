@@ -3,6 +3,37 @@
   "updatedAt": "2026-10-30",
   "entries": [
     {
+      "id": "20261030-03",
+      "date": "2026-10-30",
+      "type": "docs",
+      "title": "更新文档使用新的演示效果",
+      "trigger": "用户要求精简 README，使用新的键盘演示截图，并将本轮文档更新整理为一次提交",
+      "rootCause": "两个 README 保留了旧演示图片及已知问题章节，需要与当前展示内容统一，开发记录也存在可合并的文档更新条目",
+      "solution": "删除两个 README 的已知问题章节和旧截图表格，仅保留主仓库普通键盘、悬浮键盘两张新截图，SDK 引用主仓库图片；统一文档及本机构建配置目录说明，精简环境记录，并整理本轮提交",
+      "changedFiles": [
+        {
+          "path": "README.md、yuyansdk/README.md",
+          "notes": "删除旧问题章节，统一展示两张新键盘截图"
+        },
+        {
+          "path": "images/、yuyansdk/images/",
+          "notes": "清理 38 张旧图片，只保留两张用户提供的演示图，避免重复资源"
+        },
+        {
+          "path": ".gitignore、change_log.md、change_details.json、yuyansdk 指针",
+          "notes": "统一本机构建配置目录规则、开发记录及 SDK 文档引用"
+        }
+      ],
+      "verification": "检查两个 README 已移除已知问题章节，图片引用均指向现存的普通键盘与悬浮键盘截图；保留截图的内容与整理前一致，旧演示图片及引用均已删除。Git 差异检查及文档结构检查通过；应用源码、版本号和既有发行标签不变",
+      "lessons": [
+        "SDK 独立仓库的 README 应引用主仓库提供的演示图片，避免使用不存在的相对路径或保存重复资源"
+      ],
+      "commits": {
+        "main": "本次提交",
+        "yuyansdk": "46a861daa2f1c115016433ae88f9b697b07ea022"
+      }
+    },
+    {
       "id": "20261030-02",
       "date": "2026-10-30",
       "type": "chore",
@@ -1472,7 +1503,6 @@
       "keystore": {
         "path": "keystore/yuyan.jks",
         "alias": "yuyan",
-        "password": "yuyanime2026",
         "note": "本地自签名，未入库。与他处打包的同名包签名不一致时需先卸载再安装"
       },
       "outputPath": "app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionName>_debug.apk",
@@ -1493,6 +1523,41 @@
       }
     },
     "codeMap": [
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/InputFeedbacks.kt",
+        "role": "系统按键音与振动反馈",
+        "notes": "按键音使用 AudioManager.playSoundEffect；偏好小于 5 跟随系统、5 至 9 关闭、10 及以上映射音量参数，没有主动选择通知音频流。响度仍受系统音效和静音策略影响"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/KeyboardFeedbacksFragment.kt",
+        "role": "按键音和振动开关及强度设置",
+        "notes": "声音滑块范围 0 至 40，写入 InputFeedbacks 读取的同一 soundOnKeyPress 偏好；偏好底层名称沿用历史键，不应仅因命名与振动相反就直接改名"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/utils/DevicesUtils.kt",
+        "role": "尺寸换算与键盘音效、振动调用入口",
+        "notes": "tryPlayKeyDown 按普通键、空格、删除及回车选择系统音效类型，实际音量和振动由 InputFeedbacks 处理"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/utils/AppUtil.kt",
+        "role": "应用设置界面和具体设置页的任务跳转",
+        "notes": "设置入口使用显式 SettingsActivity 和 NEW_TASK，具体页面由 NavDeepLinkBuilder 创建；当前 IME 在标准 Android 上允许启动界面，厂商后台弹出限制需对应系统验证"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/SettingsMenuClick.kt",
+        "role": "键盘菜单操作分发",
+        "notes": "Settings 菜单通过 AppUtil.launchSettings(Launcher.instance.context) 打开应用设置；声音、主题、悬浮和工具菜单各有独立分支"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SettingsContainer.kt",
+        "role": "键盘内部菜单网格及拖动排序",
+        "notes": "RecyclerView 菜单由数据库和预设映射生成，按键盘宽度确定列数；菜单可滚动，设置入口不一定在第一屏"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/SkbFunData.kt",
+        "role": "键盘菜单文字、图标和操作类型预设",
+        "notes": "使用 Android drawable 资源作为菜单图标，与 README 的旧 JPG 演示截图无关，清理文档图片不应删除这些应用资源"
+      },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/DecodingInfo.kt",
         "role": "界面共享的候选、组合文本和解码操作状态",

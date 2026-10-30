@@ -63,14 +63,6 @@
 
 从 5.0.2 起，默认使用系统底栏，不主动隐藏系统导航栏；原「全面屏键盘优化」更名为「底部快捷栏」，可按需增加快捷按钮和滑动光标功能。已保存的快捷栏选择在升级时保留，未配置用户使用新的默认值。系统底栏的按钮样式及输入法切换入口取决于系统、导航方式和已启用的输入法数量。
 
-## 已知问题：
-* 小米手机中键盘菜单点击设置等无反应:  
-  由于小米手机中键盘跳转应用界面需借助`后台弹出界面`权限，该权限需用户手动开启：设置-应用管理-语燕SelfOpt-权限管理-开启`后台弹出界面`权限即可。
-* 三星手机按键音量调节无效:  
-  语燕输入法使用系统`通知`音量作为按键默认音量，但不同手机表现不同。输入法会以手机系统音量设置为前提，当手机静音时，无输入法按键音。当手机未静音时，以`通知`音量大小为基准进行调节。在三星手机中，基于`系统`音量大小进行调解。
-* 在输入一半内容时切换横竖屏，较大概率导致横屏模式屏幕触摸无效，仅能点击键盘按键。
-  临时方案：切换横竖屏前，确保输入框内容为空。
-
 ## 开发环境：
 > Android SDK: minSdk 23, [app/build.gradle](./app/build.gradle)  
 > 第三方库: [build.gradle](./build.gradle)  
@@ -196,29 +188,10 @@ adb shell am instrument -w -e require16Kb true -e downloadHandwritingModel true 
 | 雷电模拟器中选择语燕无效，`ime set` 报成功但仍为内置输入法 | 已在雷电 14 验证：`adb -s <设备标识> shell settings put secure default_input_method com.yuyan.selfopt.offline.release/com.yuyan.imemodule.service.ImeService`；再查询 `settings get secure default_input_method` 并实际输入验证。Debug 包应将包名末尾改为 `.debug` |
 
 ## 键盘预览：
-| 九宫键盘 | 全拼键盘 | 乱序17 |
-| - | - | - |
-| ![九宫格拼音键盘](./images/t9_pinyin.jpg) | ![全键拼音键盘](./images/qwerty_pinyin.jpg) | ![乱序17拼音](./images/double_lx17.jpg) |
 
-| 双拼键盘 | 笔画键盘 | 手写键盘 |
-| - | - | - |
-| ![双拼键盘](./images/double_pinyin.jpg) | ![笔画键盘](./images/stroke_pinyin.jpg) | ![手写键盘](./images/writing_pinyin.jpg) |
-
-| 英语键盘 | 数字键盘 | 编辑键盘 |
-| - | - | - |
-| ![英语键盘](./images/qwerty.jpg) |  ![数字键盘](./images/number.jpg) | ![编辑键盘](./images/textedit.jpg) |
-
-| 剪切板 | 单手键盘 | 悬浮键盘 |
-| - | - | - |
-| ![剪切板](./images/clipboard.jpg) | ![单手键盘](./images/onehand.jpg) | ![悬浮键盘](./images/float.jpg) |
-
-| 表情键盘 | 微信特效 | 数字行 |
-| - | - | - |
-| ![表情键盘](./images/emoji.jpg) | ![微信特效](./images/emoji_wechat.jpg) | ![数字行](./images/number_line.jpg) |
-
-| 深色主题 | 设置菜单 | 物理键盘 |
-| - | - | - |
-| ![深色主题](./images/dark.jpg) | ![设置菜单](./images/setting.jpg) | ![物理键盘](./images/hardware_keyboard.jpg) |
+| 普通键盘 | 悬浮键盘 |
+| --- | --- |
+| ![普通键盘](./images/普通键盘.jpg) | ![悬浮键盘](./images/悬浮键盘.jpg) |
 
 ## 鸣谢：
 感谢以下优秀的开源社区贡献：

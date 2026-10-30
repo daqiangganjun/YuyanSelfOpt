@@ -7,7 +7,7 @@ captures/
 .externalNativeBuild
 .idea/
 *.jks
-keystore/keystore.properties
+keystore/
 CLAUDE.md
 /.kotlin
 *.log
