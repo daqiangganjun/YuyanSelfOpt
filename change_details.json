@@ -3,6 +3,51 @@
   "updatedAt": "2026-10-31",
   "entries": [
     {
+      "id": "20261031-01",
+      "date": "2026-10-31",
+      "type": "chore",
+      "title": "提交推送并正式发行 5.1.2",
+      "trigger": "用户要求将本轮语音识别、全键对齐和内置连接检查改动提交、推送并发布 Release",
+      "rootCause": "功能和验证已完成，但两个仓库尚未提交，已有本地测试 APK 未绑定最终提交，需要从已提交源码构建并核验正式产物",
+      "solution": "先以仓库所有者身份提交并推送 SDK，再提交并推送主仓库及 SDK 指针；从干净源码重新构建正式签名 Release，创建并推送 selfopt-v5.1.2 标签。先上传 GitHub 草稿，核对远端附件名称、大小和 SHA256 后正式发布，并设置为最新版。同步补全前三项功能记录中的实际提交哈希。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk 指针与本轮既有功能文件",
+          "notes": "SDK 提交 381a80c27bd494052164ae67b5d80e557596e138，主仓库功能提交 101897c1b526c31722ff2e7e948c746d0dc5207b，均已推送"
+        },
+        {
+          "path": "change_log.md、change_details.json",
+          "notes": "补全功能提交关联，记录发行来源、正式产物与远端校验结论"
+        }
+      ],
+      "verification": "发布前核对两个仓库与远端一致且使用 daqiangganjun 身份，检查 Git 索引全部受控文件均不含测试密钥。沿用本轮已通过的真实豆包转写、参数、Keystore、录音触摸与连接检查回归记录。从已提交且干净的源码执行 :app:assembleOfflineRelease --init-script build_mirror.init.gradle，构建通过。正式 APK 的包名、versionName=5.1.2、versionCode=50102、minSdk=23、ARM64 ABI、v1/v2 签名、16 KB ZIP 对齐、ZIP 完整性、内置测试音频及 DEX 内实际源码提交标识全部核对通过；全 APK ZIP 条目未检出测试密钥、凭据文件或签名配置。GitHub 草稿附件已上传完成，名称、66775526 字节大小及 SHA256 与本地一致；正式发布后确认非草稿、非预发布并为 latest。",
+      "release": {
+        "tag": "selfopt-v5.1.2",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.1.2",
+        "publishedAt": "2026-10-31T14:46:15Z",
+        "sourceCommit": "101897c1b526c31722ff2e7e948c746d0dc5207b",
+        "sdkCommit": "381a80c27bd494052164ae67b5d80e557596e138",
+        "artifact": "yuyanSelfOpt_5.1.2_release.apk",
+        "size": 66775526,
+        "sha256": "b6e897407492bc7dd1c0a933e50585006a77d007e897ee47b066b60796bb0009",
+        "packageName": "com.yuyan.selfopt.offline.release",
+        "versionCode": 50102,
+        "minSdk": 23,
+        "abi": "arm64-v8a",
+        "signingCertificateSha256": "4bc412163eb5ea22358363043acf30227559f736afc8363a8ce68763521cc966"
+      },
+      "lessons": [
+        "正式发行应在提交后重新构建，核对 APK 的实际源码标识与标签目标一致；功能提交后的纯发行记录提交不改变已发布代码。",
+        "Build-Tools 36 的 aapt2 dump badging 使用 minSdkVersion 字段；校验命令应兼容此前 sdkVersion 字段，避免将工具输出格式变化误判为 APK 问题。",
+        "GitHub 附件应在 uploaded 状态下核对 size 与 sha256 digest，草稿核验通过后再设为最新版。"
+      ],
+      "commits": {
+        "main": "本次记录提交",
+        "releaseSource": "101897c1b526c31722ff2e7e948c746d0dc5207b",
+        "yuyansdk": "381a80c27bd494052164ae67b5d80e557596e138"
+      }
+    },
+    {
       "id": "20261030-06",
       "date": "2026-10-30",
       "type": "feat",
@@ -39,7 +84,7 @@
         "Android instrumentation 结束可能早于 SharedPreferences.apply 的磁盘写入；测试恢复关键配置时使用 commit，避免临时供应商 ID 残留导致下次进程无法解析。"
       ],
       "commits": {
-        "main": "本次提交",
+        "main": "101897c1b526c31722ff2e7e948c746d0dc5207b",
         "yuyansdk": "381a80c27bd494052164ae67b5d80e557596e138"
       }
     },
@@ -70,7 +115,7 @@
         "整行居中应由实际按键宽度求和计算，避免使用与行宽独立的固定偏移；修改 SoftKey 布局坐标可同时修正绘制与触摸区域，无需改动 Canvas 标签位置。"
       ],
       "commits": {
-        "main": "本次提交",
+        "main": "101897c1b526c31722ff2e7e948c746d0dc5207b",
         "yuyansdk": "381a80c27bd494052164ae67b5d80e557596e138"
       }
     },
@@ -121,7 +166,7 @@
         "该模拟器在前台目标活动被 instrumentation 强停时可能同时移除任务，误杀新建测试进程；先退出目标应用并回到桌面，再启动 instrumentation。UI 测试应在测试进程启动后才切换默认输入法，并在 finally 恢复。"
       ],
       "commits": {
-        "main": "本次提交",
+        "main": "101897c1b526c31722ff2e7e948c746d0dc5207b",
         "yuyansdk": "381a80c27bd494052164ae67b5d80e557596e138"
       }
     },
@@ -1670,6 +1715,15 @@
         "pitfalls": "Xime 手写的 boost 头文件列表缺 boost/vmd，而 librime 1.17.0 的 rime_api.cc 用它展开 RIME_EXTRA_MODULES 宏，会报 fatal error；改用 boost/libs/*/include 与 boost/libs/*/*/include 通配即可。X11/keysym.h not found 是警告，可忽略",
         "artifactSize": "arm64-v8a 可执行文件 strip 前 82 MB，llvm-strip --strip-all 后 4.2 MB，与现有 libyuyanime.so 的 4.4 MB 相当",
         "configureCommand": "cmake -S tmp_rime_jni -B tmp_rime_jni/build -G Ninja -DCMAKE_MAKE_PROGRAM=<sdk>/cmake/3.31.6/bin/ninja.exe -DCMAKE_TOOLCHAIN_FILE=<sdk>/ndk/28.2.13676358/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release"
+      },
+      "latestVerifiedRelease": {
+        "tag": "selfopt-v5.1.2",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.1.2",
+        "mainCommit": "101897c1b526c31722ff2e7e948c746d0dc5207b",
+        "sdkCommit": "381a80c27bd494052164ae67b5d80e557596e138",
+        "artifact": "yuyanSelfOpt_5.1.2_release.apk",
+        "sha256": "b6e897407492bc7dd1c0a933e50585006a77d007e897ee47b066b60796bb0009",
+        "verification": "2026-10-31 从干净且已提交源码重建；签名、版本、源码标识、ZIP 完整性、16 KB ZIP 对齐及无测试密钥检查通过，远端附件大小和 SHA256 一致。"
       }
     },
     "codeMap": [
