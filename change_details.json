@@ -19,7 +19,7 @@
         { "path": "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt", "notes": "按键和粘滞、粘贴路由、真实键盘中英文与方案保留、真实面板预览确认取消、异步过期和目标切换回归" },
         { "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json、新增终端图标及字符串", "notes": "版本 5.2.0、使用说明、扩展接口及开发记录" }
       ],
-      "verification": "Debug、测试包及 Release 构建通过，Release 签名、版本 5.2.0/50200 和 16 KB ZIP 对齐检查通过。7 项常规 Android 回归通过，覆盖六种中文方案保留、真实英文逐键输入、组合键、粘贴路由、真实转换面板与异步会话。另在已安装的 Termux 中通过真实 IME 验证编辑小键盘左右、Home/End、原生粘贴和单次粘滞 Ctrl+C：独立会话实际执行命令，校验唯一临时文件中的结果，确认 sleep 60 被中断后立即执行后续命令；测试结束关闭会话、删除结果文件并恢复剪贴板和原输入法设置。",
+      "verification": "完整运行 8 项 Android 回归全部通过，覆盖六种中文方案保留、终端期间主动更改中文布局后的一致恢复、真实英文逐键输入、组合键与粘贴路由、真实转换面板确认取消、异步过期结果与目标切换。实际 Termux 测试通过独立会话执行命令，校验临时结果文件，验证编辑小键盘左右、Home/End、原生粘贴及单次粘滞 Ctrl+C 中断 sleep 60 后立即执行后续命令；会话、临时文件、剪贴板和原输入法设置均已恢复或清理。从主仓库 c34869f 和 SDK f357f17 的已提交源码重新构建 Debug/Release，通过 Release 验签、ZIP 完整性、16 KB ZIP 对齐、5.2.0/50200 版本和实际源码标识校验；Release 不含调试输入宿主及 Android 测试类。",
       "lessons": [
         "终端的空输入缓冲不能作为实际光标边界依据；方向键应由终端解释。",
         "Home 必须使用 KEYCODE_MOVE_HOME，不能使用系统 KEYCODE_HOME；标准键码交由终端生成与当前模式匹配的序列。",
@@ -28,7 +28,8 @@
         "终端顶部仅保留单行终端专用键，方向、Home/End 和粘贴统一复用编辑小键盘，避免重复显示。",
         "Termux 实测必须先执行就绪命令确认 Shell 已进入命令编辑状态；InputConnection 文本提交与按键注入是异步通道，跨进程终端不会为每次按键发出可用于 waitForIdle 的无障碍事件，应按真实点按间隔验证。"
       ],
-      "commits": { "main": "本次提交", "yuyansdk": "f357f17cdaecc5a7d34ddd2e3f143b9be46ae47b" }
+      "buildArtifact": {"name": "yuyanSelfOpt_5.2.0_release.apk", "sourceCommit": "c34869f2443d44b819f5e8a04d05e5e558e64da2", "sdkCommit": "f357f17cdaecc5a7d34ddd2e3f143b9be46ae47b", "size": 66779111, "sha256": "92072867090e4daaa56afb26a8a9b84dbfadbbcdadebd9c7fc6c96d103b50eb1"},
+      "commits": { "main": "c34869f2443d44b819f5e8a04d05e5e558e64da2", "yuyansdk": "f357f17cdaecc5a7d34ddd2e3f143b9be46ae47b" }
     },
     {
       "id": "20261031-02",
@@ -61,7 +62,7 @@
         "SettingsContainer 同时承载设置菜单和布局选择页，工具栏的重复点击判断必须区分子页面，不能只判断容器类型。"
       ],
       "commits": {
-        "main": "本次提交",
+        "main": "c34869f2443d44b819f5e8a04d05e5e558e64da2",
         "yuyansdk": "f357f17cdaecc5a7d34ddd2e3f143b9be46ae47b"
       }
     },
