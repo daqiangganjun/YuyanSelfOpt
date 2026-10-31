@@ -1,7 +1,130 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-30",
+  "updatedAt": "2026-10-31",
   "entries": [
+    {
+      "id": "20261030-06",
+      "date": "2026-10-30",
+      "type": "feat",
+      "title": "新增内置语音连接检查按钮，版本 5.1.2",
+      "trigger": "用户要求在应用内提供可点击的检查按钮，方便验证语音识别配置",
+      "rootCause": "原有检查参数仅在本地校验格式，不能确认 API Key、计费资源和当前参数是否能完成实际识别；实际调用此前依赖开发时的外部测试",
+      "solution": "在语音设置的 API Key 下方新增检查连接入口，读取当前供应商、加密凭据及参数，通过公共 SpeechSession 发送内置合成测试语音。等待最终非空识别结果后显示检查成功、识别文字和耗时；缺少密钥、参数无效、鉴权、网络、服务错误或超时均返回可读信息且不展示原始异常。检查不受语音启用开关和麦克风权限限制，不录音；按供应商采样率线性转换 PCM，防止未来供应商采样率差异。检查期间禁用重复点击，最长 25 秒，离开页面、切换供应商、修改参数或编辑/清除密钥时取消并释放会话。复用既有协程和网络依赖，无新增依赖。版本更新为 5.1.2。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/SpeechConnectionCheck.kt",
+          "notes": "公共接口驱动的异步检查、内置音频发送、采样率适配、结果及失败分类、超时与取消释放"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/VoiceSettingsFragment.kt",
+          "notes": "可点击的检查入口、进度/重复点击控制、结果弹窗、配置监听和页面生命周期清理"
+        },
+        {
+          "path": "yuyansdk/src/main/assets/speech/connection_check.pcm",
+          "notes": "本机合成的“你好，语音识别测试。”，16 kHz/16 bit/单声道 PCM，100320 字节，不含用户录音或凭据"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/SpeechIntegrationTest.kt",
+          "notes": "新增当前供应商/凭据缺失/错误码/8 kHz 转换/取消释放回归及真实豆包内置音频检查；临时凭据 finally 清除或还原，供应商配置同步 commit 恢复"
+        },
+        {
+          "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "统一版本 5.1.2、最小更新功能说明及开发记忆"
+        }
+      ],
+      "verification": "未授予 RECORD_AUDIO 权限时，真实豆包内置音频检查返回成功并识别出语音识别或其繁体文字。两项新增 Android 回归通过：当前供应商与缺少密钥、服务错误码、8 kHz 采样率转换和取消释放；真实内置音频调用。设备实际点击语音设置中的检查连接，确认缺少 API Key 时弹出明确提示，密钥无需预置。Debug、测试 APK 和 Release 构建通过；Release apksigner 及 zipalign -c -P 16 4 通过；确认 Release APK 含内置 PCM，扫描所有改动文件与 Debug/Release/测试 APK 的全部 ZIP 条目均未发现测试密钥。恢复原默认和启用输入法列表；真实测试凭据在 finally 还原或清除。",
+      "lessons": [
+        "语音接入检查应等待最终非空识别结果，不能仅将 WebSocket 握手或本地参数校验成功当作接入成功。",
+        "使用公开的内置合成测试音频可在无麦克风权限时检查实际识别链路，避免为了诊断而采集用户声音；采样率应与供应商保持一致。",
+        "Android instrumentation 结束可能早于 SharedPreferences.apply 的磁盘写入；测试恢复关键配置时使用 commit，避免临时供应商 ID 残留导致下次进程无法解析。"
+      ],
+      "commits": {
+        "main": "本次提交",
+        "yuyansdk": "381a80c27bd494052164ae67b5d80e557596e138"
+      }
+    },
+    {
+      "id": "20261030-05",
+      "date": "2026-10-30",
+      "type": "fix",
+      "title": "中英文全键第二行自动居中，版本 5.1.1",
+      "trigger": "用户反馈全键第二行视觉偏右，与第一行中心和第三行按键不对齐，要求在已有语音接入改动上顺便修正",
+      "rootCause": "KeyboardLoaderUtil 的中文/双拼全键和英文全键分支都将第二行左边界固定为 0.06；9 个宽度为 0.099 的按键总宽为 0.891，实际居中左留白应约为 0.0545，固定偏移导致整行向右移动约键盘宽度的 0.55%。",
+      "solution": "两处分支改为根据第二行实际按键宽度求和计算左留白 (1 - rowWidth) / 2，在生成 SoftKey 几何边界时统一应用，绘制与触摸命中区域同步移动；按键尺寸、顺序和其它行保持原有定义。版本提升至 5.1.1，保留尚未提交的语音接入改动。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/utils/KeyboardLoaderUtil.kt",
+          "notes": "中文/双拼全键及英文全键第二行按总宽度自动居中"
+        },
+        {
+          "path": "build.gradle",
+          "notes": "统一版本提升至 5.1.1"
+        },
+        {
+          "path": "change_log.md、change_details.json",
+          "notes": "记录原因、范围、设备与构建验证，更新代码职责及当前产物路径"
+        }
+      ],
+      "verification": "1080、720、360、277 像素宽度的几何检查通过，第二行左右留白相差不超过 1 像素；设备实际打开中英文全键并查看截图，确认第二行居中。触摸调整后 A 键左缘与 L 键，再短按空格，宿主输入框成功收到 al，验证触摸边界随显示同步更新。Debug/Release 构建通过；Release apksigner 和 zipalign -c -P 16 4 通过；扫描新版 Debug/Release APK 全部 ZIP 条目，未发现此前语音测试密钥。设备默认和启用输入法列表已恢复，调试键盘切回中文九键。",
+      "lessons": [
+        "整行居中应由实际按键宽度求和计算，避免使用与行宽独立的固定偏移；修改 SoftKey 布局坐标可同时修正绘制与触摸区域，无需改动 Canvas 标签位置。"
+      ],
+      "commits": {
+        "main": "本次提交",
+        "yuyansdk": "381a80c27bd494052164ae67b5d80e557596e138"
+      }
+    },
+    {
+      "id": "20261030-04",
+      "date": "2026-10-30",
+      "type": "feat",
+      "title": "接入可扩展语音识别与长按空格录音，版本 5.1.0",
+      "trigger": "用户要求测试豆包流式语音识别，长按空格调用，保留其它供应商接口及各类参数；难懂参数提供可点击的圆圈叹号说明，测试密钥不得进入源码、Git 或安装包",
+      "rootCause": "语音设置原为空壳，没有录音、识别会话、供应商抽象和运行时凭据管理；原隐私与 README 的完全离线说明也不适用于新增的可选云端语音",
+      "solution": "新增 SpeechProvider/SpeechSession/SpeechListener 与动态参数描述，内置豆包 gzip 二进制 WebSocket 协议；录音采用 16 kHz/16 bit/单声道 PCM，长按开始、松开结束，预览与最终上屏分离；取消、超时、切换编辑器、隐藏键盘及输入动作均清理会话，使用代次和 InputConnection 校验过滤迟到结果。各供应商参数独立保存，常用参数控件及高级 JSON 共存，自动补全说话人和领域能力的依赖；每项参数具有可点击说明，整数可留空采用服务默认值。凭据用 Android Keystore/AES-GCM 加密并绑定供应商 ID，密文写入 noBackupFilesDir，密钥不进入 BuildConfig、默认偏好、资源或日志。版本提升至 5.1.0，声明 OkHttp 4.12.0 和必要权限，最小同步已有文档及隐私说明。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/",
+          "notes": "公共供应商与会话接口、参数描述和保存、加密凭据、豆包协议/供应商、录音和结果控制器"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/VoiceSettingsFragment.kt、ImeSettingsFragment.kt、utils/AppUtil.kt",
+          "notes": "设置入口、麦克风授权、动态控件、运行时密钥填写、参数校验与帮助弹窗"
+        },
+        {
+          "path": "yuyansdk/src/main/res/layout/preference_speech_option.xml、drawable/ic_speech_option_help.xml",
+          "notes": "独立的圆圈叹号说明按钮，保留开关的操作区域和无障碍描述"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/BaseKeyboardView.kt、InputView.kt、service/ImeService.kt",
+          "notes": "长按空格开始、松开结束和取消；在会话生命周期边界清理录音与网络"
+        },
+        {
+          "path": "yuyansdk/build.gradle、src/main/AndroidManifest.xml、src/main/res/raw/privacypolicy.json",
+          "notes": "显式引入 OkHttp 4.12.0、网络/录音权限，以及可选云识别的数据处理说明"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/SpeechIntegrationTest.kt",
+          "notes": "协议、依赖参数、Keystore 加密/清除、可选真实 API 调用和真实 AudioRecord/触摸入口测试；使用运行时密钥和外部测试音频，UI 测试结束恢复配置和输入法"
+        },
+        {
+          "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "统一版本 5.1.0、使用及扩展说明、隐私事实、验证和开发记忆"
+        }
+      ],
+      "verification": "基础配置真实调用通过（合成中文音频）；扩展配置启用台湾正体、说话人分离、方言识别、语义顺滑、语速/音量及情绪/性别/年龄检测后真实调用通过，并断言返回繁体文字和说话人编号。5 项语音回归分批通过：协议结束帧/服务错误/截断包、参数依赖与扩展、Keystore 密文/禁止备份/删除、真实豆包转写、短按空格/长按 AudioRecord 产生 PCM/松开最终上屏/取消后忽略迟到结果。设备实际打开参数说明弹窗并查看截图。Debug、测试 APK 与 Release 构建通过；Release apksigner、zipalign -c -P 16 4 通过。扫描改动文件与 Debug/Release/测试 APK 全部 ZIP 条目，均未发现测试密钥。",
+      "lessons": [
+        "豆包当前文档支持单一 X-Api-Key，2.0 小时版资源为 volc.seedasr.sauc.duration，WebSocket 端点为 /api/v3/sauc/bigmodel_async；不要套用旧 App ID/Access Token 鉴权要求。",
+        "end_window_size 显式配置时 vad_segment_duration 不生效，数值控件应允许留空；说话人等附加能力需补全 show_utterances，地图/音乐推荐需补全 enable_nonstream。",
+        "公共会话返回累计结果和分句附加信息，输入框只提交最终纯文字；result_type 必须为 full，避免增量结果覆盖或丢失已识别前缀。",
+        "Windows 同工作区 Gradle 构建需串行，防止 R.jar 文件占用；Android CLI 在该模拟器上增量安装失败时改用 --use-delta-install=false 完整安装。",
+        "该模拟器在前台目标活动被 instrumentation 强停时可能同时移除任务，误杀新建测试进程；先退出目标应用并回到桌面，再启动 instrumentation。UI 测试应在测试进程启动后才切换默认输入法，并在 finally 恢复。"
+      ],
+      "commits": {
+        "main": "本次提交",
+        "yuyansdk": "381a80c27bd494052164ae67b5d80e557596e138"
+      }
+    },
     {
       "id": "20261030-03",
       "date": "2026-10-30",
@@ -242,13 +365,34 @@
       "rootCause": "旧闭源 JNI 无法维护；新核心接入还需处理逻辑方案标识、旧九键/乱序编码、候选下标、拼音显示、部分选词后的编辑及用户数据迁移，单纯更换动态库不能保持现有输入行为",
       "solution": "新增固定版本 native 构建链和自有 libselfopt_rime.so，使用 librime 1.17.0、Lua、octagram、predict；SchemaRegistry 将旧界面标识映射到白霜/雾凇共 20 个方案。T9 与乱序17的编码规则适配现有按键栈，模糊音进入 algebra，删除应用层重复查询。预测数据由真实基础词频生成并按宿主光标上下文查询，保留 JNI UTF-16 边界及全局候选下标。EngineRuntime 在后台解包、部署、迁移，检查部署失败通知及实际字典可用性，支持重试恢复；普通按键和 native 操作串行保护。旧三类 userdb 先复制备份、在独立源目录导出，再导入暂存目标目录，核对条数并原子启用，保留原始目录。增加笔画通配 Lua、候选翻页代次检查、物理键盘视图迟创建的输入状态补发，并禁止 :hw 进程重复启动 Rime。更新构建依赖、CI、许可证说明和版本号",
       "changedFiles": [
-        { "path": "yuyansdk/native/", "notes": "自有 JNI、CMake、锁定依赖、构建与方案生成脚本、笔画通配翻译器；生成物与缓存不入库" },
-        { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/", "notes": "新增运行时和方案映射，适配 Rime/Kernel/按键与候选逻辑，删除应用层模糊音重放" },
-        { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/", "notes": "准备状态与重试入口、词库切换设置、主进程初始化、物理键盘生命周期、过期翻页丢弃及源码许可证说明" },
-        { "path": "yuyansdk/src/main/assets/rime/", "notes": "旧预编译词库移出构建；本地备份在 native/.cache/legacy-assets，APK 仅使用生成的新词库包" },
-        { "path": "app/src/androidTest/、app/src/debug/", "notes": "真实词库/JNI 集成回归与仅调试包可用的本地输入测试宿主" },
-        { "path": "build.gradle、app/build.gradle、yuyansdk/build.gradle、.github/workflows/build.yml", "notes": "版本 5.0.0、原生构建任务、测试依赖与 CI 的 Python/NDK/CMake 准备" },
-        { "path": "README.md、yuyansdk/README.md、CLAUDE.md、change_log.md、change_details.json", "notes": "同步构建、迁移、许可、兼容边界及开发记忆；CLAUDE.md 为既有本地忽略文件" }
+        {
+          "path": "yuyansdk/native/",
+          "notes": "自有 JNI、CMake、锁定依赖、构建与方案生成脚本、笔画通配翻译器；生成物与缓存不入库"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/",
+          "notes": "新增运行时和方案映射，适配 Rime/Kernel/按键与候选逻辑，删除应用层模糊音重放"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/",
+          "notes": "准备状态与重试入口、词库切换设置、主进程初始化、物理键盘生命周期、过期翻页丢弃及源码许可证说明"
+        },
+        {
+          "path": "yuyansdk/src/main/assets/rime/",
+          "notes": "旧预编译词库移出构建；本地备份在 native/.cache/legacy-assets，APK 仅使用生成的新词库包"
+        },
+        {
+          "path": "app/src/androidTest/、app/src/debug/",
+          "notes": "真实词库/JNI 集成回归与仅调试包可用的本地输入测试宿主"
+        },
+        {
+          "path": "build.gradle、app/build.gradle、yuyansdk/build.gradle、.github/workflows/build.yml",
+          "notes": "版本 5.0.0、原生构建任务、测试依赖与 CI 的 Python/NDK/CMake 准备"
+        },
+        {
+          "path": "README.md、yuyansdk/README.md、CLAUDE.md、change_log.md、change_details.json",
+          "notes": "同步构建、迁移、许可、兼容边界及开发记忆；CLAUDE.md 为既有本地忽略文件"
+        }
       ],
       "verification": "Windows PowerShell 下以默认命令成功从 native/.cache 中的固定源码构建，不再依赖临时验证工作区。Android 15 的 Pixel_35_Lite（emulator-5554，支持 ARM64 转换）完成 11 项真实词库集成测试：全拼/英文混输、T9/六种双拼/乱序17/笔画与通配、模糊音部署、全局下标翻页选词、emoji/繁体跨方案恢复、光标上下文联想、字库切换与重启、侧栏选音撤销、保留已选词的后缀编辑、拼音编辑及缺失方案失败恢复。实际触屏完成九键输入、侧栏选音、候选点击上屏「你好」。将历史 yuyan_userdb.tar 作为旧版数据放入调试应用外部目录后，迁移导出的 1452 条拼音记录与原始 yuyan_pinyin.txt 逐条一致，实际物理键盘输入 haodu 的首选为「好嘟」；冷启动后 .migration 的时间/大小不变且记录仍逐条一致。Debug/Release 构建已通过；新 JNI 的 ELF LOAD 对齐为 0x4000，APK 不再包含旧 libyuyanime.so 或 assets/rime。现有 ML Kit libdigitalink.so 仍为 0x1000，不能宣称整包已兼容 16 KB。模拟器启动时曾发生系统 UI 自身 ANR，界面测试关闭了动画；此前的功能回归未安装到实体手机 最后一次 instrumentation_delivery.txt 为 OK (11 tests)，耗时 74.078 秒；Release 5.0.0（versionCode 50000）验签及 ZIP 校验通过，已在虚拟设备启用并将迁移词「好嘟」上屏。Release 备份注入时发现 lost 子目录仍归 shell 所有，恢复为该应用 UID 后迁移通过，1452 条导出记录仍逐条一致。当前 Release APK SHA256 为 76275acc558083ff40de52fdfe7c6f22e223381a079bc2d7d61f298d850e252f，体积 70663933 字节。 2026-09-15 12:40:36 按用户指定覆盖安装到首个设备 3B157R006H000000（RMX6688）：adb install -r 返回 Success，包管理器确认从 4.1.0/40100 更新为 5.0.0/50000；未卸载或清空应用数据。本次仅确认安装结果，未重新验证真机输入功能。",
       "lessons": [
@@ -275,8 +419,14 @@
       "rootCause": "历史对话混合了早期假设、后续修正与阶段性实测，不能直接作为完整接入规格。核心能力的命令行验证没有覆盖 Android JNI、现有九键选音、拼音编辑、联想触发、生命周期及升级部署。记录还将本项目误写为 GPL-3.0，并把 SDK 的四架构配置误当成应用必须打包四架构",
       "solution": "建议沿用自编译 librime + 自有 JNI，先将固定版本依赖和最小白霜方案接入现有界面，完成全拼输入、候选上屏及可靠初始化，再补九键/双拼交互、联想、模糊音配置部署与用户词库迁移，最后扩展雾凇等方案。保持引擎访问串行，部署和数据迁移应可恢复且重复执行不重复累加；初始化失败需要可见状态。方案 id、键盘类型和能力先集中映射，避免一次重构成任意方案平台。此为评审建议，未实施代码变更",
       "changedFiles": [
-        { "path": "change_log.md", "notes": "新增评审索引" },
-        { "path": "change_details.json", "notes": "补充已验证边界、接口差异与源码职责" }
+        {
+          "path": "change_log.md",
+          "notes": "新增评审索引"
+        },
+        {
+          "path": "change_details.json",
+          "notes": "补充已验证边界、接口差异与源码职责"
+        }
       ],
       "verification": "静态阅读 claude-dev.md 的路线讨论、阶段一结果及末尾限定，并核对当前源码：T9PinYinUtils 将 abc/def 等映射为 A/D 等大写字母，KeyRecordStack 按此记录与恢复拼音选择；白霜九键 probe 测的是数字码。librime-predict 的 Predictor 默认依赖 commit_history，且 README 要求 predict.db、schema processor/translator 和 prediction 开关；与当前按光标前任意文本查询的 API 不等价。RimeSetInput 最终设置整个 input 并将 caret 放到串尾，不能据此认定与局部 replaceRimeKey 等价。历史记录明确 emoji 未实测启用；未见同词库仅切 grammar 的对照实验。根 LICENSE 与 SDK LICENSE 均为 BSD-3-Clause，app/build.gradle 只包含 arm64-v8a。未重新构建、运行 probe 或操作手机",
       "lessons": [
@@ -1484,7 +1634,7 @@
         "entry": "yuyansdk/native/build_native.py（Gradle preBuild 自动调用）",
         "sources": "yuyansdk/native/.cache；依赖版本和 SHA256 见 dependencies.lock.json",
         "requirements": "Python 3.12、PyYAML 6.0.3、NDK 28.2.13676358、CMake 3.31.6",
-        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.0.3_release.apk",
+        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.1.2_release.apk",
         "compatibility": "Rime 与 ML Kit 19.0.0 的 ARM64 原生库均满足 16 KB ELF/RELRO 要求，最终 Debug/Release APK 的 ZIP 对齐及 Release AAB 的 PAGE_ALIGNMENT_16K 已通过检查；实际 16 KB 运行验证见最新 entries"
       },
       "os": "Windows，终端使用 PowerShell",
@@ -1750,18 +1900,18 @@
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
-        "role": "输入法服务主类，继承 InputMethodService，是所有系统输入回调的入口",
-        "notes": "持有 mInputView（软键盘主视图）与 mCandidateView（物理键盘候选栏）。isSoftKeyboard / isHardwareKeyboard 两个标志由 handleHardwareKeyboard() 统一设置，调用点在 onStartInput 与 onConfigurationChanged。视图为按需创建，状态标志早于视图存在，二者不可互相推断。isSoftKeyboard 在无物理键盘机型上恒为 true，不能用它推断输入法窗口是否可见。onKeyDown/onKeyUp 采用『先交给视图处理，未处理则回落 super』的短路结构，回落时必须调用同方向的基类方法，且同一按键的 DOWN 与 UP 必须保持一致的消费决策"
+        "role": "输入法服务、编辑器和语音会话生命周期",
+        "notes": "延迟创建 VoiceInputController；输入开始/结束、隐藏窗口、旋转、销毁和光标变化取消语音，阻止结果进入其它输入框。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
         "role": "软键盘主视图，承载候选栏、键盘容器与弹窗，同时是按键事件的业务处理入口",
-        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存 手写走组合文本：handwritingComposing 非空表示输入框中有未落定的字，此时 chooseAndUpdate、空格、回车、退格、onUpdateSelection 均有专门分支。默认保留系统输入法导航栏，以 navigationBars/captionBar 联合 Insets 预留底部安全区；额外栏使用 padding，悬浮模式保留拖动条高度，导航图标明暗随主题更新。"
+        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存 手写走组合文本：handwritingComposing 非空表示输入框中有未落定的字，此时 chooseAndUpdate、空格、回车、退格、onUpdateSelection 均有专门分支。默认保留系统输入法导航栏，以 navigationBars/captionBar 联合 Insets 预留底部安全区；额外栏使用 padding，悬浮模式保留拖动条高度，导航图标明暗随主题更新。；语音动作转发给 ImeService；普通按键输入前取消待返回的语音会话。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
         "role": "键盘容器的创建、缓存与切换",
-        "notes": "switchKeyboard 是唯一切换入口，:hw 进程的绑定与解绑挂钩于此；release() 中需一并解绑"
+        "notes": "switchKeyboard 是唯一切换入口，:hw 进程的绑定与解绑挂钩于此；release() 中需一并解绑；currentContainer 为 BaseContainer；语音触摸回归在主线程递归查找当前容器内的真实 BaseKeyboardView。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/FullDisplayKeyboardBar.kt",
@@ -1776,7 +1926,7 @@
       {
         "path": "yuyansdk/build.gradle",
         "role": "SDK 库模块构建配置",
-        "notes": "仅构建 arm64-v8a，Build-Tools 36.0.0、JVM 17；offline 从 build/generated/rime 加载自编译 JNI 和词库包，preBuild 自动调用 buildRimeNative；使用 KSP 2、Room 2.6.1、ML Kit 19.0.0、kotlinx.serialization 与 viewBinding；BuildConfig 注入版本及 git 信息"
+        "notes": "仅构建 arm64-v8a，Build-Tools 36.0.0、JVM 17；offline 从 build/generated/rime 加载自编译 JNI 和词库包，preBuild 自动调用 buildRimeNative；使用 KSP 2、Room 2.6.1、ML Kit 19.0.0、kotlinx.serialization 与 viewBinding；BuildConfig 注入版本及 git 信息；语音 WebSocket 显式依赖 OkHttp 4.12.0；Java/Kotlin JVM 17 与原生构建任务保持原有约定。"
       },
       {
         "path": ".github/workflows/build.yml",
@@ -1847,6 +1997,111 @@
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/DoublePinYinUtils.kt",
         "role": "双拼码还原成完整拼音，供拼音气泡显示",
         "notes": "硬编码 4 套双拼键位表（abc/紫光/乱序17/小鹤），与 T9PinYinUtils、LX17PinYinUtils 同属应用层持有方案知识的设计。实测 librime 在双拼下 preedit 直接就是 zi dao le、九键候选的 comment 自带 zhi dao le，换后端后这三个工具类大部分可简化"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/SpeechProvider.kt",
+        "role": "语音公共供应商、会话、结果及动态参数接口",
+        "notes": "注册供应商后设置页按其 options 生成独立控件；details 用于可点击说明，回调线程由调用方切回主线程。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/SpeechSettings.kt",
+        "role": "按供应商保存和验证语音参数",
+        "notes": "speech_settings 与 AppPrefs 分离，不存凭据；整数空值省略，JSON 根据供应商要求转为对象或字符串。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/SpeechCredentials.kt",
+        "role": "运行时语音凭据的加密与清除",
+        "notes": "Android Keystore AES-GCM，供应商 ID 为 AAD，AtomicFile 密文写入 noBackupFilesDir/speech_credentials；不预置测试密钥。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/DoubaoProtocol.kt",
+        "role": "豆包二进制语音帧编解码",
+        "notes": "gzip、JSON 首帧、递增音频序号及负序号结束帧；支持服务错误、序号/事件及压缩响应，并限制长度和解压大小。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/DoubaoSpeechProvider.kt",
+        "role": "豆包流式识别与参数适配",
+        "notes": "新式 X-Api-Key，默认 2.0 小时版和二遍识别；全量结果，保留分句、说话人及原始附加信息，自动补全参数依赖并限制发送队列。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/VoiceInputController.kt",
+        "role": "输入法录音、预览和最终提交生命周期",
+        "notes": "连接/最终结果超时 15 秒，录音最长 60 秒；录音在工作线程，代次及 InputConnection 阻止过期上屏，音频不落盘。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/VoiceSettingsFragment.kt",
+        "role": "语音供应商、权限、密钥和参数设置页",
+        "notes": "默认关闭，独立密钥对话框不持久化明文；JSON/整数输入校验，每项参数圆圈叹号可查看 details。；密钥下方提供检查连接，显示进度、结果和耗时；修改配置或离开页面会取消，防止迟到结果覆盖。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/BaseKeyboardView.kt",
+        "role": "软键盘触摸、长按及滑动处理",
+        "notes": "空格长按优先开始语音，UP 结束、CANCEL 取消且不补空格；长按前触发的空格滑动仍移除长按消息，保留光标移动。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/ImeSettingsFragment.kt",
+        "role": "应用设置主入口",
+        "notes": "语音识别导航与已有手写、键盘设置并列。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/base/CsPreferenceFragment.kt",
+        "role": "偏好页面与标准编辑/列表对话框",
+        "notes": "语音设置复用此基类；自定义圆圈叹号为独立点击目标，不经过偏好项的 toggle 操作。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/entity/keyboard/SoftKeyboard.kt",
+        "role": "键盘布局与按键几何查找",
+        "notes": "getKeyByCode 和按键边界用于设备端直接验证空格触摸入口。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/setup/SetupActivity.kt",
+        "role": "输入法启用与默认选择引导",
+        "notes": "shouldShowUp 取决于 SetupPage.hasUndonePage；调试设置页可能先进入引导。"
+      },
+      {
+        "path": "app/src/androidTest/java/com/yuyan/SpeechIntegrationTest.kt",
+        "role": "语音协议、凭据、真实接口和触摸入口回归",
+        "notes": "真实调用需 speechApiKey 运行时参数及 externalFilesDir/speech-test.pcm；speechProfile=rich 验证繁体/说话人等，speechUiTest=true 验证触摸与录音并恢复设置。；新增 connectionCheckUsesCurrentProviderAndCancelsItsSession 与 liveBuiltInConnectionCheckRecognizesItsBundledSample；真实检查只需运行时 speechApiKey，不需要外部音频或麦克风权限，临时配置用 commit 恢复。"
+      },
+      {
+        "path": "yuyansdk/src/main/res/layout/preference_speech_option.xml、drawable/ic_speech_option_help.xml",
+        "role": "语音参数行和圆圈叹号按钮",
+        "notes": "保留标准 title/summary/widget_frame ID，兼容开关与编辑控件，帮助按钮具有独立 48dp 点击区域。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/entity/keyboard/SoftKey.kt",
+        "role": "软键盘单键状态和几何边界",
+        "notes": "空格不是可重复键；重复行为仅适用于删除、方向光标及方向键。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/PrivacyPolicyFragment.kt",
+        "role": "隐私说明资源的界面展示",
+        "notes": "读取 raw/privacypolicy.json，新增云端语音事实必须同步此资源。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/base/CsEditTextPreferenceDialogFragment.kt",
+        "role": "编辑偏好对话框和恢复默认值",
+        "notes": "默认按钮读取 Preference 的默认字符串；语音整数默认空串，用于省略对应请求字段。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/Functions.kt",
+        "role": "偏好项恢复默认值的扩展",
+        "notes": "EditTextPreference 与 ListPreference 使用默认字符串并先调用 change listener 校验。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/utils/KeyboardLoaderUtil.kt",
+        "role": "键盘布局生成、按键边界计算与缓存",
+        "notes": "中文/双拼全键和英文全键的第二行按实际按键总宽度自动居中；setSkbCoreSize 将比例坐标转换为绘制和触摸共用的像素区域，允许不超过 1 像素的取整误差。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/QwertyContainer.kt",
+        "role": "全键盘容器及布局加载",
+        "notes": "从 KeyboardLoaderUtil 获取布局并交给键盘 View；几何修正应放在布局加载阶段，避免显示与触摸命中区域不一致。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/SpeechConnectionCheck.kt",
+        "role": "应用内语音供应商实际连接检查",
+        "notes": "读取当前设置和运行时加密凭据，通过公共 SpeechSession 发送 assets/speech/connection_check.pcm；按供应商采样率转换 PCM，不使用麦克风，25 秒超时且 finally 释放；成功必须收到最终非空识别文字。"
       }
     ],
     "constraints": [
@@ -1867,7 +2122,8 @@
       "「移到行首/行末」用 MOVE_HOME/MOVE_END 按键而非 setSelection，前者才会让宿主把光标滚进可视区；能用 InputConnection 完成的编辑操作不要走 performContextMenuAction，后者会惊动宿主选择态、连续调用可能导致失焦收起键盘",
       "模糊音一类派生等价拼写的 algebra 规则必须排在双拼键位 xform 与九键数字映射之前：xform 不保留原形，转换后 ^zh 之类的规则已匹配不到。白霜全拼把模糊音块放在 algebra 首位正是此理",
       "librime 部署时缺 <dict>.reverse.bin 会无条件置 rebuild_table（dict_compiler.cc 中该检查不判断是否存在源文件），继而用收集到的空数据重建 table。因此没有 dict.yaml 时不能只靠 table.bin 重建 prism；反过来说，正常部署本就会产出 reverse.bin，语燕 assets 缺它是打包时去掉的",
-      "迁移用户词库须走 librime levers 的 export_user_dict/import_user_dict 文本通道，不要直接改名搬运 LevelDB 目录：导出文本只含词条、标准全拼音节与使用次数，可跨方案名与 librime 版本；直接搬目录则要同时赌这两者兼容"
+      "迁移用户词库须走 librime levers 的 export_user_dict/import_user_dict 文本通道，不要直接改名搬运 LevelDB 目录：导出文本只含词条、标准全拼音节与使用次数，可跨方案名与 librime 版本；直接搬目录则要同时赌这两者兼容",
+      "语音测试或运行时供应商密钥不得写入源码、Git、BuildConfig、资源、APK、默认偏好或日志；凭据仅由 SpeechCredentials 在 noBackupFilesDir 保存 Keystore 加密密文。"
     ]
   }
 }
