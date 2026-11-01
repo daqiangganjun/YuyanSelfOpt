@@ -36,7 +36,7 @@
           "notes": "版本 5.2.1 与行为、配置及开发记录同步"
         }
       ],
-      "verification": "Debug 与 Android 测试包构建通过。官方 Android 15、16 KB 环境的 12 项常规回归全部通过，涵盖六种中文方案与中英切换、英文逐键直输、符号及 Alt+Enter 真实输入路由、预览取消和异步过期隔离、持续花漾字、宿主原始输入、连接重建以及工具栏位置和灰态。真实 Termux 的独立会话回归通过，校验编辑左右、Home/End、原生粘贴、粘滞 Ctrl+C，以及 Alt+Enter 的 ESC 加换行字节；临时会话和文件已清理。界面截图已核对持续原文栏、光标及完成取消。Release 将从提交后的源码构建并补录校验。未将额外 JNI 排查改动纳入提交。",
+      "verification": "Debug 与 Android 测试包构建通过。官方 Android 15、16 KB 环境的 12 项常规回归全部通过，涵盖六种中文方案与中英切换、英文逐键直输、符号及 Alt+Enter 真实输入路由、预览取消和异步过期隔离、持续花漾字、宿主原始输入、连接重建以及工具栏位置和灰态。真实 Termux 的独立会话回归通过，校验编辑左右、Home/End、原生粘贴、粘滞 Ctrl+C，以及 Alt+Enter 的 ESC 加换行字节；临时会话和文件已清理。界面截图已核对持续原文栏、光标及完成取消；设置恢复引用修复后单独复核工具栏回归通过。Release 从主仓库 87820db 与 SDK a8d50fc 的已提交源码构建成功，通过 v1/v2 验签、16 KB ZIP 对齐、ZIP 完整性、5.2.1/50201 版本及 DEX 实际源码标识检查，未包含调试宿主、测试类或额外 JNI 诊断类。两设备输入法设置已精确恢复，只关闭本轮新建的官方模拟器。未将额外 JNI 排查改动纳入提交。",
       "lessons": [
         "原文输入框只维护本地输入连接，宿主窗口点击作为原始输入意图；内部弹出菜单和编辑工具条不能被当作宿主点击。",
         "失焦确认与关闭花漾字模式须分离，完成后重新建立下一段会话，空内容取消才关闭模式。",
@@ -44,8 +44,15 @@
         "粘滞修饰键只由实际输入消费，数字和符号布局切换保留；有键码的字母直接组合原键码，避免中文大写标签引入额外 Shift。",
         "异步预览测试应等待实际结果而非固定休眠；过期结果测试须先确认旧任务已经启动，再发起新请求。恢复 enabled_input_methods 时须引用完整值，避免子类型分号被 Shell 解释。"
       ],
+      "buildArtifact": {
+        "name": "yuyanSelfOpt_5.2.1_release.apk",
+        "sourceCommit": "87820db3f914806472de224a2901886bed1f5d40",
+        "sdkCommit": "a8d50fcc3499fc3a96d38f6af99d11c424eaaccc",
+        "size": 66778438,
+        "sha256": "48cbe5950c0debd6f04310e1d1e38282bdd41286ab1bf05cbe5cd9b6316319f2"
+      },
       "commits": {
-        "main": "未提交",
+        "main": "87820db3f914806472de224a2901886bed1f5d40",
         "yuyansdk": "a8d50fcc3499fc3a96d38f6af99d11c424eaaccc"
       }
     },
@@ -1790,7 +1797,7 @@
         "entry": "yuyansdk/native/build_native.py（Gradle preBuild 自动调用）",
         "sources": "yuyansdk/native/.cache；依赖版本和 SHA256 见 dependencies.lock.json",
         "requirements": "Python 3.12、PyYAML 6.0.3、NDK 28.2.13676358、CMake 3.31.6",
-        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.0_release.apk",
+        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.1_release.apk",
         "compatibility": "Rime 与 ML Kit 19.0.0 的 ARM64 原生库均满足 16 KB ELF/RELRO 要求，最终 Debug/Release APK 的 ZIP 对齐及 Release AAB 的 PAGE_ALIGNMENT_16K 已通过检查；实际 16 KB 运行验证见最新 entries"
       },
       "os": "Windows，终端使用 PowerShell",
