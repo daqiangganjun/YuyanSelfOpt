@@ -31,10 +31,12 @@ import com.yuyan.imemodule.prefs.AppPrefs
 import com.yuyan.imemodule.prefs.behavior.SkbMenuMode
 import com.yuyan.inputmethod.EngineRuntime
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -107,6 +109,82 @@ class TerminalInputIntegrationTest {
     }
 
     @Test
+    fun stickyModifiersApplyToSymbolsAndSpecialKeys() {
+        val target = RecordingConnection()
+        val dispatcher = TerminalInputDispatcher({ target }, { EditorInfo().apply { packageName = "com.termux" } })
+        val symbols = listOf("[" to KeyEvent.KEYCODE_LEFT_BRACKET, "{" to KeyEvent.KEYCODE_LEFT_BRACKET,
+            "|" to KeyEvent.KEYCODE_BACKSLASH, "?" to KeyEvent.KEYCODE_SLASH,
+            "［" to KeyEvent.KEYCODE_LEFT_BRACKET, "。" to KeyEvent.KEYCODE_PERIOD)
+        symbols.forEach { (symbol, expectedCode) ->
+            target.events.clear()
+            dispatcher.modifiers.toggle(KeyEvent.KEYCODE_CTRL_LEFT)
+            dispatcher.sendText(symbol)
+            val key = target.events.first { it.action == KeyEvent.ACTION_DOWN && !KeyEvent.isModifierKey(it.keyCode) }
+            assertEquals(expectedCode, key.keyCode)
+            assertTrue("Symbols must preserve the sticky Ctrl modifier", key.isCtrlPressed)
+            assertTrue(target.commits.isEmpty())
+            assertEquals(TerminalModifiers.State.Off, dispatcher.modifiers.ctrl)
+        }
+        listOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_DPAD_LEFT).forEach { code ->
+            target.events.clear()
+            dispatcher.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT)
+            dispatcher.sendKey(code)
+            assertTrue(target.events.first { it.action == KeyEvent.ACTION_DOWN && it.keyCode == code }.isAltPressed)
+            assertEquals(TerminalModifiers.State.Off, dispatcher.modifiers.alt)
+        }
+        dispatcher.sendText("，")
+        assertEquals("，", target.commits.last())
+    }
+
+    @Test
+    fun stickySymbolsAndAltEnterUseTheRealInputViewRoutes() = withKeyboard { input, editor ->
+        val events = mutableListOf<KeyEvent>()
+        instrumentation.runOnMainSync {
+            editor.setOnKeyListener { _, _, event -> events.add(KeyEvent(event)); true }
+            input.toggleTerminalMode()
+            input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_LANG))
+            input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT)
+            input.responseLongKeyEvent(com.yuyan.imemodule.prefs.behavior.PopupMenuMode.Text to "|")
+        }
+        awaitCondition("An upward symbol must carry Alt in Chinese terminal mode") {
+            events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_BACKSLASH && it.isAltPressed && it.isShiftPressed }
+        }
+        instrumentation.runOnMainSync {
+            assertEquals(TerminalModifiers.State.Off, input.terminalInput.modifiers.alt)
+            events.clear()
+            input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_CTRL_LEFT)
+            input.responseKeyEvent(SoftKey(label = "["))
+        }
+        awaitCondition("A symbol-panel key must carry Ctrl and bypass paired insertion") {
+            events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_LEFT_BRACKET && it.isCtrlPressed }
+        }
+        instrumentation.runOnMainSync {
+            events.clear()
+            input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_CTRL_LEFT)
+            input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_A))
+        }
+        awaitCondition("Chinese keyboard labels must not add a Shift modifier to Ctrl+A") {
+            events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_A && it.isCtrlPressed && !it.isShiftPressed }
+        }
+        instrumentation.runOnMainSync {
+            events.clear()
+            input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT)
+            input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_NUMBER))
+            assertEquals(TerminalModifiers.State.Once, input.terminalInput.modifiers.alt)
+            input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_RETURN))
+            assertEquals(TerminalModifiers.State.Once, input.terminalInput.modifiers.alt)
+            input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_ENTER))
+        }
+        awaitCondition("Alt+Enter must be emitted as a modified Enter key") {
+            events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_ENTER && it.isAltPressed }
+        }
+        instrumentation.runOnMainSync {
+            assertEquals(TerminalModifiers.State.Off, input.terminalInput.modifiers.alt)
+            editor.setOnKeyListener(null)
+        }
+    }
+
+    @Test
     fun composingPreviewReplacesAndCancelRestoresSelection() = runBlocking {
         val target = RecordingConnection()
         lateinit var session: TextTransformSession
@@ -116,12 +194,12 @@ class TerminalInputIntegrationTest {
             session = TextTransformSession(target, true, { true }) { _, _, _ -> }
             session.update("first", transformer { "<$it>" })
         }
-        delay(100)
+        awaitCondition("The first composing preview must replace the selected text") { target.editable.toString() == "<first>" }
         withContext(Dispatchers.Main) {
             assertEquals("<first>", target.editable.toString())
             session.update("second", transformer { "<$it>" })
         }
-        delay(100)
+        awaitCondition("The second composing preview must replace the previous preview") { target.editable.toString() == "<second>" }
         withContext(Dispatchers.Main) {
             assertEquals("<second>", target.editable.toString())
             session.finish(false)
@@ -139,7 +217,7 @@ class TerminalInputIntegrationTest {
             session = TextTransformSession(target, false, { current }) { _, _, _ -> }
             session.update("command", transformer { "[$it]" })
         }
-        delay(100)
+        awaitCondition("The terminal preview must finish before confirmation") { !session.isBusy }
         withContext(Dispatchers.Main) {
             assertTrue(target.commits.isEmpty())
             assertEquals("", target.editable.toString())
@@ -160,17 +238,24 @@ class TerminalInputIntegrationTest {
     fun lateAsyncResultsCannotOverwriteNewerInput() = runBlocking {
         val target = RecordingConnection()
         lateinit var session: TextTransformSession
+        val oldStarted = CompletableDeferred<Unit>()
+        val oldFinished = CompletableDeferred<Unit>()
         val provider = transformer { source ->
-            if (source == "old") withContext(NonCancellable) { delay(250) }
+            if (source == "old") withContext(NonCancellable) {
+                oldStarted.complete(Unit)
+                delay(250)
+                oldFinished.complete(Unit)
+            }
             "[$source]"
         }
         withContext(Dispatchers.Main) {
             session = TextTransformSession(target, true, { true }) { _, _, _ -> }
             session.update("old", provider)
         }
-        delay(30)
+        withTimeout(10_000) { oldStarted.await() }
         withContext(Dispatchers.Main) { session.update("new", provider) }
-        delay(350)
+        withTimeout(10_000) { oldFinished.await() }
+        awaitCondition("The newer preview must remain after the old conversion finishes") { target.editable.toString() == "[new]" }
         withContext(Dispatchers.Main) {
             assertEquals("[new]", target.editable.toString())
             session.finish(true)
@@ -286,36 +371,190 @@ class TerminalInputIntegrationTest {
     }
 
     @Test
-    fun realTransformPanelRoutesSourceLocallyAndSupportsCancelAndConfirm() = withKeyboard { input, editor ->
+    fun flowerModeConfirmsSegmentsWithoutClosingItsSourceEditor() = withKeyboard { input, editor ->
         instrumentation.runOnMainSync {
             editor.setText("prefix ")
             editor.setSelection(editor.length())
         }
         settleKeyboard()
         instrumentation.runOnMainSync {
-            input.openTextTransformPanel()
+            AppPrefs.getInstance().internal.lastFlowerTypefaceMode.setValue("FlowerVine")
+            input.onSettingsMenuClick(SkbMenuMode.FlowerTypeface)
+            assertTrue(input.isTransformingText)
+            assertEquals("取消", findKeyboard(input)?.getSoftKeyboard()?.getKeyByCode(KeyEvent.KEYCODE_ENTER)?.keyLabel)
             input.responseKeyEvent(SoftKey(label = "你好"))
         }
-        awaitCondition("The host must display the transformed preview", { diagnostics(input, editor) }) { editor.text.toString().contains("ζั͡") }
+        awaitCondition("The host must display one transformed preview", { diagnostics(input, editor) }) { editor.text.toString().contains("ζั͡") }
         instrumentation.runOnMainSync {
-            assertTrue("The source editor must receive the original text", descendants(input.auxiliaryPanel).filterIsInstance<EditText>().first().text.toString() == "你好")
-            assertTrue(editor.text.toString().startsWith("prefix "))
-            assertTrue("The host must receive one transformed preview", editor.text.toString().contains("ζั͡"))
-            input.auxiliaryPanel.closeEditor(false)
+            val source = flowerSource(input)
+            assertEquals("你好", source.text.toString())
+            assertEquals("完成", findKeyboard(input)?.getSoftKeyboard()?.getKeyByCode(KeyEvent.KEYCODE_ENTER)?.keyLabel)
+            source.setSelection(0, source.length())
+            input.responseKeyEvent(SoftKey(label = "世界"))
         }
-        awaitCondition("Cancel must restore the host text") { editor.text.toString() == "prefix " }
-        instrumentation.runOnMainSync {
-            assertEquals("prefix ", editor.text.toString())
-            input.openTextTransformPanel()
-            input.responseKeyEvent(SoftKey(label = "确认"))
+        awaitCondition("Editing the source must replace its current preview") { editor.text.contains("世") && !editor.text.contains("你") }
+        saveUiSnapshot("tmp_flower_preview.png")
+        instrumentation.runOnMainSync { input.auxiliaryPanel.completeFlowerInput() }
+        awaitCondition("Done must commit and retain the source focus") {
+            input.isTransformingText && flowerSource(input).isFocused && flowerSource(input).text.isEmpty() &&
+                BaseInputConnection.getComposingSpanStart(editor.text) == -1
         }
-        awaitCondition("The second preview must reach the host") { editor.text.toString().contains("确") }
-        instrumentation.runOnMainSync { input.auxiliaryPanel.closeEditor(true) }
-        awaitCondition("Confirmation must finish composing") { BaseInputConnection.getComposingSpanStart(editor.text) == -1 }
+        saveUiSnapshot("tmp_flower_continue.png")
         instrumentation.runOnMainSync {
+            assertEquals(com.yuyan.imemodule.data.flower.FlowerTypefaceMode.FlowerVine, CustomConstant.flowerTypeface)
+            assertTrue(input.auxiliaryPanel.isShown)
+            input.responseKeyEvent(SoftKey(label = "下一段"))
+        }
+        awaitCondition("A second segment must append a separate preview") { editor.text.count { it == 'ζ' } == 2 }
+        instrumentation.runOnMainSync { input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_ENTER)) }
+        awaitCondition("Keyboard Done must commit without adding a newline") {
+            input.isTransformingText && flowerSource(input).text.isEmpty() && BaseInputConnection.getComposingSpanStart(editor.text) == -1
+        }
+        instrumentation.runOnMainSync {
+            assertFalse(editor.text.contains("\n"))
+            assertEquals("取消", findKeyboard(input)?.getSoftKeyboard()?.getKeyByCode(KeyEvent.KEYCODE_ENTER)?.keyLabel)
+            input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_ENTER))
             assertFalse(input.isTransformingText)
-            assertTrue(editor.text.toString().contains("确"))
-            assertEquals(-1, BaseInputConnection.getComposingSpanStart(editor.text))
+            assertEquals(com.yuyan.imemodule.data.flower.FlowerTypefaceMode.Disabled, CustomConstant.flowerTypeface)
+        }
+    }
+
+    @Test
+    fun tappingTheHostUsesRawInputAndKeepsFlowerModeAvailable() = withKeyboard { input, editor ->
+        instrumentation.runOnMainSync {
+            editor.setText("")
+            AppPrefs.getInstance().internal.lastFlowerTypefaceMode.setValue("FlowerVine")
+        }
+        settleKeyboard()
+        instrumentation.runOnMainSync {
+            input.toggleFlowerTypeface()
+            input.responseKeyEvent(SoftKey(label = "hi"))
+        }
+        awaitCondition("The first flower preview must reach the host") { editor.text.contains("ζั͡") }
+        tapEditorCaret(editor)
+        awaitCondition("Tapping the existing host caret must enable raw input") { !input.isTransformingText }
+        instrumentation.runOnMainSync {
+            assertTrue(input.auxiliaryPanel.isShown)
+            assertNotEquals(com.yuyan.imemodule.data.flower.FlowerTypefaceMode.Disabled, CustomConstant.flowerTypeface)
+            input.responseKeyEvent(SoftKey(label = " RAW"))
+        }
+        awaitCondition("Raw host input must bypass flower conversion") { editor.text.toString().endsWith(" RAW") && editor.text.count { it == 'ζ' } == 1 }
+        tapView(flowerSource(input))
+        awaitCondition("Tapping the source must resume flower input") { input.isTransformingText && flowerSource(input).isFocused }
+        instrumentation.runOnMainSync { input.responseKeyEvent(SoftKey(label = "next")) }
+        awaitCondition("Resuming the source must create a new preview") { editor.text.count { it == 'ζ' } == 2 }
+        instrumentation.runOnMainSync { input.auxiliaryPanel.completeFlowerInput() }
+    }
+
+    @Test
+    fun toolbarControlsKeepClipboardPositionAndShowKeyboardSelectionState() = withKeyboard { input, _ ->
+        val preset = com.yuyan.imemodule.data.menuSkbFunsPreset
+        val baseline = listOf(SkbMenuMode.ClipBoard, SkbMenuMode.Emojicon, SkbMenuMode.TextEdit, SkbMenuMode.SwitchKeyboard).map { preset.getValue(it) }
+        val clipboard = com.yuyan.imemodule.data.candidateToolbarItems(baseline, SkbMenuMode.ClipBoard)
+        assertEquals(listOf(SkbMenuMode.ClearClipBoard, SkbMenuMode.LockClipBoard, SkbMenuMode.Phrases, SkbMenuMode.ClipBoard), clipboard.asReversed().map { it.skbMenuMode })
+        var clipboardX: Int? = null
+        instrumentation.runOnMainSync {
+            input.resetToIdleState()
+            input.updateCandidateBar()
+        }
+        settleKeyboard()
+        instrumentation.runOnMainSync {
+            menuItem(input, SkbMenuMode.ClipBoard)?.let { view ->
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                clipboardX = location[0]
+            }
+            input.onSettingsMenuClick(SkbMenuMode.SwitchKeyboard)
+        }
+        settleKeyboard()
+        instrumentation.runOnMainSync {
+            assertTrue("The keyboard switch must show its selected state", menuItem(input, SkbMenuMode.SwitchKeyboard)?.isSelected == true)
+            val selector = KeyboardManager.instance.currentContainer as com.yuyan.imemodule.keyboard.container.SettingsContainer
+            assertFalse(descendants(selector).filterIsInstance<TextView>().any { it.text.toString() == "终端模式" })
+            input.onSettingsMenuClick(SkbMenuMode.SwitchKeyboard)
+            input.onSettingsMenuClick(SkbMenuMode.ClipBoard)
+        }
+        settleKeyboard()
+        instrumentation.runOnMainSync {
+            val shown = descendants(input.mSkbCandidatesBarView).filter { it.isShown && it.tag is SkbMenuMode }.toList().sortedBy { view ->
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                location[0]
+            }
+            assertEquals(SkbMenuMode.ClearClipBoard, shown[0].tag)
+            assertEquals(SkbMenuMode.LockClipBoard, shown[1].tag)
+            clipboardX?.let { expected ->
+                val location = IntArray(2)
+                requireNotNull(menuItem(input, SkbMenuMode.ClipBoard)).getLocationOnScreen(location)
+                assertEquals("The clipboard shortcut must retain its horizontal position", expected, location[0])
+            }
+            input.onSettingsMenuClick(SkbMenuMode.LockClipBoard)
+            assertTrue(CustomConstant.lockClipBoardEnable)
+            input.onSettingsMenuClick(SkbMenuMode.LockClipBoard)
+            assertFalse(CustomConstant.lockClipBoardEnable)
+            input.onSettingsMenuClick(SkbMenuMode.ClipBoard)
+            input.onSettingsMenuClick(SkbMenuMode.SettingsMenu)
+            val settings = KeyboardManager.instance.currentContainer as com.yuyan.imemodule.keyboard.container.SettingsContainer
+            assertTrue(settings.funItems.any { it.skbMenuMode == SkbMenuMode.TerminalMode })
+            assertFalse(settings.funItems.any { it.skbMenuMode.name == "TextTransform" })
+        }
+    }
+
+    @Test
+    fun flowerModeRemainsEnabledWhenTheHostRestartsItsConnection() = withKeyboard { input, editor ->
+        instrumentation.runOnMainSync {
+            AppPrefs.getInstance().internal.lastFlowerTypefaceMode.setValue("FlowerVine")
+            input.toggleFlowerTypeface()
+            input.responseKeyEvent(SoftKey(label = "first"))
+        }
+        awaitCondition("The first preview must arrive before restarting") { editor.text.contains("ζั͡") }
+        instrumentation.runOnMainSync {
+            editor.clearFocus()
+            editor.requestFocus()
+            editor.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java).restartInput(editor)
+        }
+        settleKeyboard()
+        awaitCondition("Restarting the host must retain flower mode and reactivate its source", {
+            diagnostics(input, editor) + "; source=" + flowerSource(input).text + "; requested=" + input.wantsFlowerSourceInput
+        }) {
+            input.isTransformingText && input.auxiliaryPanel.isShown && flowerSource(input).text.isEmpty()
+        }
+        instrumentation.runOnMainSync { input.responseKeyEvent(SoftKey(label = "second")) }
+        awaitCondition("The new connection must accept the next preview") { editor.text.toString().contains("s") && flowerSource(input).text.toString() == "second" }
+        instrumentation.runOnMainSync { input.auxiliaryPanel.completeFlowerInput() }
+    }
+
+    private fun flowerSource(input: InputView) = descendants(input.auxiliaryPanel).filterIsInstance<EditText>().first()
+    private fun menuItem(input: InputView, mode: SkbMenuMode) = descendants(input.mSkbCandidatesBarView).firstOrNull { it.isShown && it.tag == mode }
+    private fun tapView(view: View) {
+        val point = FloatArray(2)
+        instrumentation.runOnMainSync {
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            point[0] = location[0] + view.width / 2f
+            point[1] = location[1] + view.height / 2f
+        }
+        tapScreen(point[0], point[1])
+    }
+    private fun tapEditorCaret(editor: EditText) {
+        val point = FloatArray(2)
+        instrumentation.runOnMainSync {
+            val location = IntArray(2)
+            editor.getLocationOnScreen(location)
+            val layout = editor.layout
+            val line = layout.getLineForOffset(editor.selectionEnd)
+            point[0] = location[0] + editor.totalPaddingLeft + layout.getPrimaryHorizontal(editor.selectionEnd) + 2f
+            point[1] = location[1] + editor.totalPaddingTop + (layout.getLineTop(line) + layout.getLineBottom(line)) / 2f - editor.scrollY
+        }
+        tapScreen(point[0], point[1])
+    }
+    private fun tapScreen(x: Float, y: Float) {
+        val down = SystemClock.uptimeMillis()
+        listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).forEach { action ->
+            val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+            event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+            instrumentation.uiAutomation.injectInputEvent(event, true)
+            event.recycle()
         }
     }
 
@@ -432,6 +671,14 @@ class TerminalInputIntegrationTest {
                 settleKeyboard()
                 key(KeyEvent.KEYCODE_ENTER)
                 awaitResult("termina_lpaste_okinterrupt_ok")
+                text("stty -icanon -echo; dd bs=1 count=2 2>/dev/null | od -An -tx1 > $resultFile; stty icanon echo")
+                key(KeyEvent.KEYCODE_ENTER)
+                settleKeyboard()
+                instrumentation.runOnMainSync { input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT) }
+                key(KeyEvent.KEYCODE_ENTER)
+                val altDeadline = SystemClock.uptimeMillis() + 10_000
+                while (SystemClock.uptimeMillis() < altDeadline && readResult() !in setOf("1b 0a", "1b 0d")) Thread.sleep(100)
+                assertTrue("Alt+Enter must deliver Escape followed by a newline", readResult() in setOf("1b 0a", "1b 0d"))
             } finally {
                 if (createdSession && service.currentInputEditorInfo?.packageName == "com.termux") closeSession()
                 shell("run-as com.termux rm -f files/home/$resultFile")
@@ -448,8 +695,12 @@ class TerminalInputIntegrationTest {
         val previousIme = shell("settings get secure default_input_method")
         val previousEnabled = shell("settings get secure enabled_input_methods")
         val preferences = PreferenceManager.getDefaultSharedPreferences(context)
-        val keys = listOf("input_default_method_mode", "input_method_pinyin_mode", "input_method_pinyin_mode_rime")
+        val suggestionKey = AppPrefs.getInstance().clipboard.clipboardSuggestion.key
+        val keys = listOf("input_default_method_mode", "input_method_pinyin_mode", "input_method_pinyin_mode_rime", "flower_typeface_mode", "last_flower_typeface_mode", suggestionKey)
         val previous = keys.associateWith { preferences.all[it] }
+        val previousLock = CustomConstant.lockClipBoardEnable
+        preferences.edit().putString("flower_typeface_mode", "Disabled").putBoolean(suggestionKey, false).commit()
+        CustomConstant.lockClipBoardEnable = false
         var activity: android.app.Activity? = null
         var input: InputView? = null
         try {
@@ -458,6 +709,7 @@ class TerminalInputIntegrationTest {
             shell("ime set $component")
             shell("settings put secure default_input_method $component")
             activity = instrumentation.startActivitySync(Intent(context, ImeTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            shell("am start -n ${context.packageName}/com.yuyan.ImeTestActivity --activity-single-top")
             val editor = activity.findViewById<EditText>(android.R.id.edit)
             instrumentation.runOnMainSync {
                 editor.requestFocus()
@@ -478,7 +730,9 @@ class TerminalInputIntegrationTest {
                 Thread.sleep(100)
             }
             val view = requireNotNull(input) { "Debug IME did not become visible" }
-            assertTrue("The debug host must have an active input connection", ready)
+            var readinessDetails = ""
+            if (!ready) instrumentation.runOnMainSync { readinessDetails = diagnostics(view, editor) }
+            assertTrue("The debug host must have an active input connection; $readinessDetails", ready)
             assertTrue("The Chinese engine must be ready", EngineRuntime.isReady)
             instrumentation.runOnMainSync { if (InputModeSwitcher.isTerminalMode) view.toggleTerminalMode() }
             instrumentation.waitForIdleSync()
@@ -486,6 +740,7 @@ class TerminalInputIntegrationTest {
         } finally {
             instrumentation.runOnMainSync {
                 input?.finishAuxiliaryInput()
+                CustomConstant.lockClipBoardEnable = previousLock
                 if (InputModeSwitcher.isTerminalMode) input?.toggleTerminalMode()
                 activity?.finish()
             }
@@ -495,6 +750,7 @@ class TerminalInputIntegrationTest {
                         null -> remove(key)
                         is Int -> putInt(key, value)
                         is String -> putString(key, value)
+                        is Boolean -> putBoolean(key, value)
                     }
                 }
             }.commit()
@@ -502,13 +758,23 @@ class TerminalInputIntegrationTest {
                 val mode = (previous["input_default_method_mode"] as? Int) ?: InputModeSwitcher.MODE_T9_CHINESE
                 InputModeSwitcher.saveInputMode(mode)
             }
-            shell("settings put secure enabled_input_methods $previousEnabled")
-            shell("settings put secure default_input_method $previousIme")
+            shell("settings put secure enabled_input_methods '$previousEnabled'")
+            shell("settings put secure default_input_method '$previousIme'")
         }
     }
 
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
         instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use { it.readText().trim() }
+
+    private fun saveUiSnapshot(name: String) {
+        settleKeyboard()
+        instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+            context.openFileOutput(name, android.content.Context.MODE_PRIVATE).use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        }
+    }
 
     private fun awaitCondition(message: String, details: () -> String = { "" }, condition: () -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + 10_000

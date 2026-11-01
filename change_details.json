@@ -1,7 +1,54 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-01",
+  "updatedAt": "2026-11-02",
   "entries": [
+    {
+      "id": "20261102-01",
+      "date": "2026-11-02",
+      "type": "fix",
+      "title": "收敛更多菜单与花漾字持续输入，扩展终端符号组合键，版本 5.2.1",
+      "trigger": "用户要求终端模式只放更多页，修复键盘选择图标状态和剪贴板按钮位置，删除按文本粘贴及独立转换入口，将处理栏集成到花漾字启用状态；随后明确保留剪贴板锁定并置于删除之后，扩展粘滞键至符号和 Alt+Enter。",
+      "rootCause": "终端入口同时出现在布局选择页；切换键盘缺少选中状态；剪贴板页按数组位置重排将剪贴板原位置替换为删除。旧花漾字全局转换与独立转换面板并存，确认后关闭编辑器，无法持续处理或切回原始输入。符号上滑和中文符号点选绕过粘滞键发送路径，布局切换还会提前清除修饰状态；编辑布局不必要地重新校验词库。",
+      "solution": "终端模式仅保留更多页入口，清理旧 TextTransform 菜单；切换键盘按选择页状态显示选中。剪贴板顶栏从左到右为删除、锁定、常用语和原位剪贴板，并保留自定义排列中剪贴板右侧的固定项。花漾字开启后在候选栏上方持续显示原文处理栏，完成提交当前一段并清空原文、保留模式和焦点，空内容取消模式；宿主点击使用原始输入，处理框点击恢复转换，模式和上次样式保存到偏好。处理栏和终端行独立挂载，内部菜单与原文编辑工具条屏蔽外部点击误判，语音沿活动输入连接路由。普通输入直接提交原文，样式仅由花漾字会话应用；连接重建保持处理意图并隔离旧结果。终端修饰键覆盖上滑、符号面板与特殊键，布局切换保留待用状态，快捷组合所需的全角 ASCII 符号只在修饰状态下映射为物理键。编辑及数字工具布局不改变或校验 Rime 方案，中文方案校验保留。Room 升级 9，仅清理旧转换菜单。版本 5.2.1。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt、keyboard/transform/TextTransformSession.kt、keyboard/InputView.kt、service/ImeService.kt",
+          "notes": "持续花漾字输入、完成和取消、原始输入切换、连接重建与内部弹出层保护"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt、data/SkbFunData.kt、adapter/CandidatesMenuAdapter.kt、adapter/MenuAdapter.kt、keyboard/container/SettingsContainer.kt",
+          "notes": "删除第一、锁定第二、剪贴板原位；终端入口归更多页及键盘切换灰态"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/terminal/TerminalInputDispatcher.kt、manager/InputModeSwitcher.kt、keyboard/TextKeyboard.kt、utils/KeyboardLoaderUtil.kt",
+          "notes": "符号与特殊键组合、布局切换保留粘滞状态、完成取消键标记和工具布局绕过词库"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/application/CustomConstant.kt、prefs/AppPrefs.kt、prefs/behavior/SkbMenuMode.kt、database/DataBaseKT.kt、callback/CandidateViewListener.kt、speech/VoiceInputController.kt、资源布局与字符串",
+          "notes": "模式样式偏好、旧入口清理、菜单生命周期、语音活动输入目标及原文栏布局"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt、app/build.gradle",
+          "notes": "持续输入、原始输入、位置与状态、重建连接及符号和 Alt+Enter 回归；测试显式声明已有 ConstraintLayout 依赖"
+        },
+        {
+          "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "版本 5.2.1 与行为、配置及开发记录同步"
+        }
+      ],
+      "verification": "Debug 与 Android 测试包构建通过。官方 Android 15、16 KB 环境的 12 项常规回归全部通过，涵盖六种中文方案与中英切换、英文逐键直输、符号及 Alt+Enter 真实输入路由、预览取消和异步过期隔离、持续花漾字、宿主原始输入、连接重建以及工具栏位置和灰态。真实 Termux 的独立会话回归通过，校验编辑左右、Home/End、原生粘贴、粘滞 Ctrl+C，以及 Alt+Enter 的 ESC 加换行字节；临时会话和文件已清理。界面截图已核对持续原文栏、光标及完成取消。Release 将从提交后的源码构建并补录校验。未将额外 JNI 排查改动纳入提交。",
+      "lessons": [
+        "原文输入框只维护本地输入连接，宿主窗口点击作为原始输入意图；内部弹出菜单和编辑工具条不能被当作宿主点击。",
+        "失焦确认与关闭花漾字模式须分离，完成后重新建立下一段会话，空内容取消才关闭模式。",
+        "终端工具布局不应触发词库校验；仅实际中文或普通英文方案切换进入引擎。",
+        "粘滞修饰键只由实际输入消费，数字和符号布局切换保留；有键码的字母直接组合原键码，避免中文大写标签引入额外 Shift。",
+        "异步预览测试应等待实际结果而非固定休眠；过期结果测试须先确认旧任务已经启动，再发起新请求。恢复 enabled_input_methods 时须引用完整值，避免子类型分号被 Shell 解释。"
+      ],
+      "commits": {
+        "main": "未提交",
+        "yuyansdk": "a8d50fcc3499fc3a96d38f6af99d11c424eaaccc"
+      }
+    },
     {
       "id": "20261031-03",
       "date": "2026-10-31",
@@ -1792,9 +1839,14 @@
     },
     "codeMap": [
       {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/callback/CandidateViewListener.kt",
+        "role": "候选栏操作与内部弹出菜单状态回调",
+        "notes": "Popup 可见状态默认回调为 Unit，软键盘 ChoiceNotifier 将其交给花漾字输入意图保护，硬键盘实现兼容。"
+      },
+      {
         "path": "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt",
         "role": "终端发送、中文方案保留及转换面板的 Android 回归",
-        "notes": "常规测试使用真实 IME 与调试输入宿主，文本重置和布局切换后等待输入连接稳定。termuxUiTest=true 启用可调试 Termux 的实际命令结果回归，使用独立会话及唯一临时结果文件，结束恢复剪贴板和输入法设置。"
+        "notes": "真实 IME 验证持续花漾字、空取消、宿主原始输入、输入重启、剪贴板位置锁定、图标状态及所有中文方案保留。符号修饰和 Alt+Enter 检查标准事件；termuxUiTest=true 在独立 Termux 会话校验真实命令输出与原始按键字节，结束恢复配置和剪贴板。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/InputViewParent.kt",
@@ -1829,32 +1881,32 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/MenuAdapter.kt",
         "role": "设置与布局菜单网格显示和选中状态",
-        "notes": "新增 TerminalMode 选中判断，入口依旧由菜单数据和预设映射提供。"
+        "notes": "TerminalMode 按独立模式显示选中，SwitchKeyboard 按布局选择子页状态显示选中；普通更多页与布局选择页分开判断。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/CandidatesMenuAdapter.kt",
         "role": "候选栏快捷菜单图标和状态显示",
-        "notes": "固定终端菜单时以 InputModeSwitcher.isTerminalMode 显示选中状态，继续复用既有排序和自定义固定功能。"
+        "notes": "固定终端菜单按模式显示选中；切换键盘按布局选择子页显示灰态，tag、isSelected 和无障碍描述用于定位及回归。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/terminal/TerminalInputDispatcher.kt",
         "role": "终端按键、文本与粘贴发送及修饰键状态",
-        "notes": "修饰键支持 Off/Once/Locked，发送时合并 metaState 并完整松开；文本无修饰时逐次 commitText，单字符组合键通过虚拟键盘映射。终端包识别与本地转换原文目标分开。"
+        "notes": "标准键码与完整按下松开发送，Off/Once/Locked；修饰状态下单字符符号映射虚拟键盘，全角 ASCII 和常见中文标点仅为快捷键映射半角。Alt+Enter 发带 Alt 的 Enter，由终端解释；无修饰的中文符号保持原样。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/transform/TextTransformSession.kt",
         "role": "可扩展转换服务注册及组合预览会话",
-        "notes": "TextTransformer 提供稳定 ID、显示名、防抖和挂起转换；内置花漾字。修订号与目标身份共同阻止过期写入，取消恢复原选中文本；终端只在确认后提交。"
+        "notes": "通用挂起转换注册与修订、目标身份校验；花漾字完成可传入同步计算的最新 finalText，已有组合区替换后落定。普通结束只落定可见预览，取消恢复原选中文字；终端保持确认后提交。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt",
         "role": "通用键盘顶部快捷键与转换原文面板",
-        "notes": "嵌入键盘主体以计入高度和触摸区域，保留候选栏；顶部仅一行 ESC/Tab/CTRL/ALT/PGUP/PGDN/更多，编辑操作复用编辑小键盘。原文控件禁止系统重绑定，通过本地 BaseInputConnection 接收输入，宿主连接单独用于预览。会话结束清空原文和修饰键并停止异步工作。"
+        "notes": "花漾字处理栏位于候选栏上方，终端行独立位于下方；启用后持续显示，完成清空并继续聚焦，空取消关闭模式。WATCH_OUTSIDE_TOUCH 区分宿主原始输入，内部 Popup/ActionMode 用计数保护。处理意图与活动会话分离，连接重建保留意图；本地 BaseInputConnection 始终不触发系统重绑定。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt",
         "role": "候选词和工具栏菜单显示与点击分发",
-        "notes": "showCandidates 根据当前容器与候选状态刷新菜单，工具栏点击转发至 InputView；从输入布局进入布局选择页后应刷新返回图标。"
+        "notes": "showCandidates 根据容器和候选状态刷新菜单，剪贴板页使用 candidateToolbarItems 保留按钮原位、删除第一及锁定第二；删除确认菜单上报可见状态，避免误判为宿主点击。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/popup/PopupPreset.kt",
@@ -1904,7 +1956,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/SkbFunData.kt",
         "role": "键盘菜单文字、图标和操作类型预设",
-        "notes": "使用 Android drawable 资源作为菜单图标，与 README 的旧 JPG 演示截图无关，清理文档图片不应删除这些应用资源"
+        "notes": "菜单预设使用 Android drawable；candidateToolbarItems 按横向 reverseLayout 返回数据，保留剪贴板右侧固定项，视觉从左到右为删除、锁定、常用语、剪贴板。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/DecodingInfo.kt",
@@ -1969,7 +2021,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/database/DataBaseKT.kt",
         "role": "Room 数据库定义、升级迁移与默认记录初始化",
-        "notes": "数据库版本为 8，包含侧栏符号、剪贴板、最近符号、常用语与菜单五张表；7→8 只向普通菜单末尾追加 TerminalMode 和 TextTransform，不改动实体或用户固定项。"
+        "notes": "数据库版本 9；7→8 添加终端和旧转换菜单，8→9 只删除 TextTransform 记录，保留终端更多页入口与剪贴板锁定。用户固定顺序及其他历史数据保留。"
       },
       {
         "path": "app/src/androidTest/java/com/yuyan/RuntimeCompatibilityTest.kt",
@@ -2099,7 +2151,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
         "role": "输入法服务、编辑器和语音会话生命周期",
-        "notes": "延迟创建 VoiceInputController；输入开始/结束、隐藏窗口、旋转、销毁和光标变化取消语音。activeInputConnection 在转换面板编辑时指向内部连接，其余为宿主连接；转换预览直接使用捕获的宿主连接并校验身份，不能通过该路由回写原文。终端和转换原文不重复应用全局花漾字。"
+        "notes": "activeInputConnection 将花漾字原文路由到本地连接，普通输入直接提交原文；宿主预览使用会话捕获的目标连接。监视窗口外部触摸切换原始输入；输入重启根据处理意图和路由修订恢复处理栏，避免覆盖用户原始输入选择。输入会话边界取消语音及旧转换。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
