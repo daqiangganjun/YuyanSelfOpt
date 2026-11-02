@@ -28,12 +28,19 @@
           "notes": "版本、使用说明与记录同步"
         }
       ],
-      "verification": "Debug 和 Android 测试包构建通过。3 项针对性 Android 回归通过，覆盖实际数字键点按、F12 按下松开与 Alt 修饰、编号隔离、双位编号、无效编号修正、软硬件退格数字路由、中文方案保留、空编号取消、返回与长按取消、编辑键盘恢复和输入结束清理；同时复核原符号与 Alt+Enter 路由。真实 Termux 独立会话测试通过，F(n) 输入12后收到 F12 标准序列 1b 5b 32 34 7e，编辑左右、Home/End、粘贴、Ctrl+C 和 Alt+Enter 回归均通过。截图核对 TAB/ESC 顺序、F(12) 状态及数字键盘，固定功能键行已移除。Release 将从已提交源码构建。",
+      "verification": "Debug 和 Android 测试包构建通过。3 项针对性 Android 回归通过，覆盖实际数字键点按、F12 按下松开与 Alt 修饰、编号隔离、双位编号、无效编号修正、软硬件退格数字路由、中文方案保留、空编号取消、返回与长按取消、编辑键盘恢复和输入结束清理；同时复核原符号与 Alt+Enter 路由。真实 Termux 独立会话测试通过，F(n) 输入12后收到 F12 标准序列 1b 5b 32 34 7e，编辑左右、Home/End、粘贴、Ctrl+C 和 Alt+Enter 回归均通过。截图核对 TAB/ESC 顺序、F(12) 状态及数字键盘，固定功能键行已移除。Release 从主仓库 9cdf8e7 和 SDK ca04a53 的已提交源码构建通过；v1/v2 签名、16 KB ZIP 对齐、ZIP 完整性、5.2.2/50202 版本、源码提交标识及调试类隔离检查通过。原输入法设置已精确恢复，测试会话和临时结果已清理。",
       "lessons": [
         "功能键编号输入只借用数字视图，必须在候选提交和粘滞修饰键消费之前拦截数字；确认与取消均恢复实际原容器。"
       ],
+      "buildArtifact": {
+        "name": "yuyanSelfOpt_5.2.2_release.apk",
+        "sourceCommit": "9cdf8e70dd9e87c7a803ca4b6e12e5ed8cde6d6c",
+        "sdkCommit": "ca04a53219beda521060df489f108c7d338175bf",
+        "size": 66794813,
+        "sha256": "2553a9bc8a2ccdd6c54383952f0e86406817ffe1e3d77553faea51fa803a0a55"
+      },
       "commits": {
-        "main": "未提交",
+        "main": "9cdf8e70dd9e87c7a803ca4b6e12e5ed8cde6d6c",
         "yuyansdk": "ca04a53219beda521060df489f108c7d338175bf"
       }
     },
@@ -1832,7 +1839,7 @@
         "entry": "yuyansdk/native/build_native.py（Gradle preBuild 自动调用）",
         "sources": "yuyansdk/native/.cache；依赖版本和 SHA256 见 dependencies.lock.json",
         "requirements": "Python 3.12、PyYAML 6.0.3、NDK 28.2.13676358、CMake 3.31.6",
-        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.1_release.apk",
+        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.2_release.apk",
         "compatibility": "Rime 与 ML Kit 19.0.0 的 ARM64 原生库均满足 16 KB ELF/RELRO 要求，最终 Debug/Release APK 的 ZIP 对齐及 Release AAB 的 PAGE_ALIGNMENT_16K 已通过检查；实际 16 KB 运行验证见最新 entries"
       },
       "os": "Windows，终端使用 PowerShell",
