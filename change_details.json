@@ -7,7 +7,7 @@
       "date": "2026-11-02",
       "type": "fix",
       "title": "统一语音与剪贴板文本提交，修复悬浮布局并增加数字兼容开关，版本5.2.3",
-      "trigger": "用户在UU远程反馈悬浮首次不圆角、数字键盘0–9无输出但上滑数字与符号正常、语音识别不上屏及语音面板横向撑满；要求语音复用剪贴板条目发送路径、增加默认开启的数字键盘兼容输入开关并升级5.2.3，打包后由用户自行测试。",
+      "trigger": "用户在UU远程反馈悬浮首次不圆角、数字键盘0–9无输出但上滑数字与符号正常、语音识别不上屏及语音面板横向撑满；要求语音复用剪贴板条目发送路径、增加默认开启的数字键盘兼容输入开关并升级5.2.3，打包后由用户自行测试，并随后授权通过ADB覆盖更新真机。",
       "rootCause": "数字键盘原来通过processEnglishKey发送按键，上滑字符与剪贴板条目则提交文本。圆角轮廓对象声明位于init块之后，字节码确认初始initView/updateTheme访问它时尚未赋值。语音面板MATCH_PARENT子视图扩大wrap_content悬浮根布局，真机观察宽度由918变2730像素且连接未切换。语音最终结果绕过InputView统一处理，仅使用最终帧文本，结束帧为空会丢弃已有预览；正式包缺少提交阶段诊断，未断言UU上屏失败已被真机验证修复。",
       "solution": "新增输入设置的数字输入分类与number_keyboard_compatible_input偏好，默认开启，仅将数字键盘0–9按文本提交；关闭保留原数字事件，修饰组合与F(n)仍优先处理。剪贴板条目、上滑文本和语音结果共用commitExternalText，保留候选处理、成对符号与终端路由，语音仍验证输入目标；本次结束帧无文本时提交同会话最近非空结果，取消时清空。语音面板固定为显示前键盘宽度，圆角对象移到init前并刷新outline。版本5.2.3，无新增依赖。",
       "changedFiles": [
@@ -28,14 +28,21 @@
           "notes": "版本5.2.3、使用入口及开发记录同步"
         }
       ],
-      "verification": "修改前已做真机只读诊断；修改后Debug构建通过，Git差异与资源检查通过，字节码确认圆角轮廓初始化已早于initView。按用户要求，不做修改后的真机或模拟器交互测试，UU上屏与语音实际效果交由用户自行复测。Release将从已提交源码构建并校验产物。",
+      "verification": "修改前已做真机只读诊断；修改后Debug构建通过，Git差异与资源检查通过，字节码确认圆角轮廓初始化已早于initView。按用户要求，不做修改后的真机或模拟器交互测试，UU上屏与语音实际效果交由用户自行复测。Release从主仓库4acc33c和SDK 3c803c0的已提交源码构建成功，通过v1/v2签名、16 KB ZIP对齐、ZIP完整性、5.2.3/50203版本、源码标识与调试类隔离检查。后续按用户明确授权执行ADB install -r覆盖更新真机成功，核对实际版本5.2.3、默认与启用输入法列表及麦克风权限保留，未清理应用数据。",
       "lessons": [
         "Kotlin实例属性与init按声明顺序执行，初始主题依赖的轮廓对象必须先完成初始化；by lazy的委托本身也不能放在调用它的init之后。",
         "wrap_content悬浮容器中的MATCH_PARENT覆盖层会参与父布局测量，应锁定当前键盘宽度。",
         "剪贴板条目点击本质也是commitText而非系统粘贴协议，共用路径能消除状态处理差异，但不能在没有实测时声称解决所有宿主兼容问题。"
       ],
+      "buildArtifact": {
+        "name": "yuyanSelfOpt_5.2.3_release.apk",
+        "sourceCommit": "4acc33c24e0e3a406f987be274d5a5d96047842c",
+        "sdkCommit": "3c803c0fc9a80b39cad93840d688623210503e80",
+        "size": 66795225,
+        "sha256": "3bfbad6632b23c64c732501c34dfd76a6f7ce728ca34603875ac808c63202836"
+      },
       "commits": {
-        "main": "未提交",
+        "main": "4acc33c24e0e3a406f987be274d5a5d96047842c",
         "yuyansdk": "3c803c0fc9a80b39cad93840d688623210503e80"
       }
     },
@@ -1914,7 +1921,7 @@
         "entry": "yuyansdk/native/build_native.py（Gradle preBuild 自动调用）",
         "sources": "yuyansdk/native/.cache；依赖版本和 SHA256 见 dependencies.lock.json",
         "requirements": "Python 3.12、PyYAML 6.0.3、NDK 28.2.13676358、CMake 3.31.6",
-        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.2_release.apk",
+        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.3_release.apk",
         "compatibility": "Rime 与 ML Kit 19.0.0 的 ARM64 原生库均满足 16 KB ELF/RELRO 要求，最终 Debug/Release APK 的 ZIP 对齐及 Release AAB 的 PAGE_ALIGNMENT_16K 已通过检查；实际 16 KB 运行验证见最新 entries"
       },
       "os": "Windows，终端使用 PowerShell",
