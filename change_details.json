@@ -24,12 +24,19 @@
           "notes": "同步单行功能区说明和重打包记录，不修改版本配置"
         }
       ],
-      "verification": "Debug 与 Android 测试包构建通过。官方 Android 15、16 KB 环境的2项针对性回归通过，覆盖扩展区仅保留14个顶栏与单行功能键按钮、F(n) 逐键编号与 Alt+F12 事件、确认恢复、编号修改、取消及中文方案保留；截图核对下方直接接数字键盘，无额外符号行和两行占位。版本配置未修改。Release 将从已提交源码重建。",
+      "verification": "Debug 与 Android 测试包构建通过。官方 Android 15、16 KB 环境的2项针对性回归通过，覆盖扩展区仅保留14个顶栏与单行功能键按钮、F(n) 逐键编号与 Alt+F12 事件、确认恢复、编号修改、取消及中文方案保留；截图核对下方直接接数字键盘，无额外符号行和两行占位。版本配置未修改。Release 从主仓库73b8bca和SDK f7ae54c的已提交源码重建通过；v1/v2签名、16 KB ZIP对齐、ZIP完整性、5.2.2/50202版本、源码标识及调试类隔离检查通过。临时验证环境的原输入法设置已恢复，仅关闭本轮启动的模拟器。",
       "lessons": [
         "删除行内容时也要移除固定可视高度和后续填充内容，避免滚动容器把其他行顶到原位置。"
       ],
+      "buildArtifact": {
+        "name": "yuyanSelfOpt_5.2.2_release.apk",
+        "sourceCommit": "73b8bcaf91985238c26fed31a31d46a2734e3f85",
+        "sdkCommit": "f7ae54ce6fc50150caaa1c54c33b516f6f8d8576",
+        "size": 66778426,
+        "sha256": "780c5b5c3413e71f164d80cd48948521c9c162e9fcdb1f296c412b900973cec5"
+      },
       "commits": {
-        "main": "未提交",
+        "main": "73b8bcaf91985238c26fed31a31d46a2734e3f85",
         "yuyansdk": "f7ae54ce6fc50150caaa1c54c33b516f6f8d8576"
       }
     },
