@@ -185,6 +185,140 @@ class TerminalInputIntegrationTest {
     }
 
     @Test
+    fun numberedFunctionKeyUsesTemporaryNumberKeyboardAndRestoresItsOrigin() = withKeyboard { input, editor ->
+        val events = mutableListOf<KeyEvent>()
+        instrumentation.runOnMainSync {
+            input.toggleTerminalMode()
+            editor.setOnKeyListener { _, _, event -> events.add(KeyEvent(event)); true }
+        }
+        openTerminalFunctions(input)
+        val button = descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().first { it.tag == "terminal_function_key" }
+        lateinit var original: com.yuyan.imemodule.keyboard.container.BaseContainer
+        instrumentation.runOnMainSync {
+            val labels = descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().map { it.text.toString() }.toList()
+            assertEquals(listOf("TAB", "ESC"), labels.take(2))
+            assertFalse(labels.any { it == "INS" || it.matches(Regex("F(?:[1-9]|1[0-2])")) })
+            original = requireNotNull(KeyboardManager.instance.currentContainer)
+            input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT)
+        }
+        tapView(button)
+        instrumentation.runOnMainSync {
+            assertTrue(button.isSelected)
+            assertEquals(KeyboardManager.KeyboardType.NUMBER, KeyboardManager.instance.currentKeyboardType)
+            assertTrue("Temporary numeric input must preserve the English mode", InputModeSwitcher.isEnglish)
+        }
+        tapKeyboardKey(input, KeyEvent.KEYCODE_1)
+        instrumentation.runOnMainSync { assertEquals("F(1)", button.text.toString()) }
+        tapKeyboardKey(input, KeyEvent.KEYCODE_2)
+        instrumentation.runOnMainSync {
+            assertEquals("F(12)", button.text.toString())
+            assertTrue("Function-key digits must not reach the host", editor.text.isEmpty() && events.isEmpty())
+            assertEquals(TerminalModifiers.State.Once, input.terminalInput.modifiers.alt)
+        }
+        saveUiSnapshot("tmp_function_key_number.png")
+        tapView(button)
+        awaitCondition("The selected F12 must carry the pending Alt modifier") {
+            events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_F12 && it.isAltPressed }
+        }
+        instrumentation.runOnMainSync {
+            assertSame("Confirmation must restore the original keyboard", original, KeyboardManager.instance.currentContainer)
+            assertEquals("F(n)", button.text.toString())
+            assertFalse(button.isSelected)
+            assertEquals(TerminalModifiers.State.Off, input.terminalInput.modifiers.alt)
+            assertEquals(1, events.count { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_F12 })
+            assertEquals(1, events.count { it.action == KeyEvent.ACTION_UP && it.keyCode == KeyEvent.KEYCODE_F12 })
+            editor.setOnKeyListener(null)
+        }
+    }
+
+    @Test
+    fun numberedFunctionKeySupportsCorrectionCancellationAndChineseLayouts() = withKeyboard { input, editor ->
+        val events = mutableListOf<KeyEvent>()
+        instrumentation.runOnMainSync {
+            input.toggleTerminalMode()
+            input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_LANG))
+            editor.setOnKeyListener { _, _, event -> events.add(KeyEvent(event)); true }
+        }
+        openTerminalFunctions(input)
+        val button = descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().first { it.tag == "terminal_function_key" }
+        val schema = AppPrefs.getInstance().internal.pinyinModeRime.getValue()
+        val original = KeyboardManager.instance.currentContainer
+        instrumentation.runOnMainSync {
+            button.performClick()
+            input.responseKeyEvent(SoftKey(label = "13"))
+            button.performClick()
+            assertEquals("F(13)", button.text.toString())
+            assertTrue(input.auxiliaryPanel.isChoosingFunctionKey)
+            assertTrue("Invalid function-key numbers must not reach the host", events.isEmpty() && editor.text.isEmpty())
+            input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_DEL))
+            assertEquals("F(1)", button.text.toString())
+            input.processKeyUp(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_NUMPAD_0))
+            assertEquals("F(10)", button.text.toString())
+            assertTrue(InputModeSwitcher.isChinese)
+            button.performClick()
+        }
+        awaitCondition("Correction must send F10") { events.any { it.keyCode == KeyEvent.KEYCODE_F10 && it.action == KeyEvent.ACTION_DOWN } }
+        instrumentation.runOnMainSync {
+            assertSame(original, KeyboardManager.instance.currentContainer)
+            assertEquals(schema, AppPrefs.getInstance().internal.pinyinModeRime.getValue())
+            button.performClick()
+            button.performClick()
+            assertFalse(input.auxiliaryPanel.isChoosingFunctionKey)
+            assertSame(original, KeyboardManager.instance.currentContainer)
+            button.performClick()
+            input.responseLongKeyEvent(com.yuyan.imemodule.prefs.behavior.PopupMenuMode.Text to "2")
+            assertEquals("F(2)", button.text.toString())
+            input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_RETURN))
+            assertFalse(input.auxiliaryPanel.isChoosingFunctionKey)
+            assertSame(original, KeyboardManager.instance.currentContainer)
+            input.onSettingsMenuClick(SkbMenuMode.TextEdit)
+            val editing = KeyboardManager.instance.currentContainer
+            button.performClick()
+            button.performLongClick()
+            assertSame(editing, KeyboardManager.instance.currentContainer)
+            input.onSettingsMenuClick(SkbMenuMode.TextEdit)
+            button.performClick()
+            input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_3))
+            input.finishAuxiliaryInput()
+            assertFalse(input.auxiliaryPanel.isChoosingFunctionKey)
+            assertEquals("F(n)", button.text.toString())
+            assertSame(original, KeyboardManager.instance.currentContainer)
+            editor.setOnKeyListener(null)
+        }
+    }
+
+    private fun openTerminalFunctions(input: InputView) {
+        instrumentation.runOnMainSync {
+            descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().first { it.text.toString() == "更多" }.performClick()
+        }
+        var bounds = android.graphics.Rect()
+        awaitCondition("The terminal functions menu must open") {
+            val item = instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("代码符号与功能键")?.firstOrNull()
+            item?.getBoundsInScreen(bounds)
+            item != null && !bounds.isEmpty
+        }
+        tapScreen(bounds.exactCenterX(), bounds.exactCenterY())
+        awaitCondition("The numbered function-key button must become visible") {
+            descendants(input.auxiliaryPanel.terminalKeys).any { it.tag == "terminal_function_key" && it.isShown }
+        }
+    }
+
+    private fun tapKeyboardKey(input: InputView, code: Int) {
+        instrumentation.runOnMainSync {
+            val keyboard = requireNotNull(findKeyboard(input))
+            val key = requireNotNull(keyboard.getSoftKeyboard()?.getKeyByCode(code))
+            val x = (key.mLeft + key.mRight) / 2f
+            val y = (key.mTop + key.mBottom) / 2f
+            val now = SystemClock.uptimeMillis()
+            listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).forEach { action ->
+                val event = MotionEvent.obtain(now, SystemClock.uptimeMillis(), action, x, y, 0)
+                keyboard.dispatchTouchEvent(event)
+                event.recycle()
+            }
+        }
+    }
+
+    @Test
     fun composingPreviewReplacesAndCancelRestoresSelection() = runBlocking {
         val target = RecordingConnection()
         lateinit var session: TextTransformSession
@@ -679,6 +813,20 @@ class TerminalInputIntegrationTest {
                 val altDeadline = SystemClock.uptimeMillis() + 10_000
                 while (SystemClock.uptimeMillis() < altDeadline && readResult() !in setOf("1b 0a", "1b 0d")) Thread.sleep(100)
                 assertTrue("Alt+Enter must deliver Escape followed by a newline", readResult() in setOf("1b 0a", "1b 0d"))
+                text("stty -icanon -echo; dd bs=1 count=5 2>/dev/null | od -An -tx1 > $resultFile; stty icanon echo")
+                key(KeyEvent.KEYCODE_ENTER)
+                settleKeyboard()
+                openTerminalFunctions(input)
+                val functionKey = descendants(input.auxiliaryPanel.terminalKeys).first { it.tag == "terminal_function_key" }
+                val originalKeyboard = KeyboardManager.instance.currentContainer
+                tapView(functionKey)
+                tapKeyboardKey(input, KeyEvent.KEYCODE_1)
+                tapKeyboardKey(input, KeyEvent.KEYCODE_2)
+                tapView(functionKey)
+                awaitResult("1b 5b 32 34 7e")
+                instrumentation.runOnMainSync {
+                    assertSame("Termux function-key input must restore its original keyboard", originalKeyboard, KeyboardManager.instance.currentContainer)
+                }
             } finally {
                 if (createdSession && service.currentInputEditorInfo?.packageName == "com.termux") closeSession()
                 shell("run-as com.termux rm -f files/home/$resultFile")

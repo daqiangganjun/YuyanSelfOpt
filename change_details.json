@@ -3,6 +3,41 @@
   "updatedAt": "2026-11-02",
   "entries": [
     {
+      "id": "20261102-02",
+      "date": "2026-11-02",
+      "type": "feat",
+      "title": "终端编号功能键与临时数字键盘，版本 5.2.2",
+      "trigger": "用户要求交换 TAB 与 ESC，以 F(n) 替代不常用 INS；点击后自动显示数字键盘，数字实时更新编号，再次点击发送并恢复原键盘，移除 F1–F12 两行。",
+      "rootCause": "终端功能键以两行固定按钮显示，占用扩展区；INS 使用率低，缺少编号输入的临时键盘和输入隔离。",
+      "solution": "顶栏先 TAB 后 ESC，扩展区以 F(n) 替换 INS 并删除固定功能键行。面板维护临时编号会话，保存当前容器类型后只显示数字视图，不修改输入模式或中文方案；数字键、数字文本和上滑数字只更新编号，退格修正，F1–F12 之外的编号提示修正。再次点击通过标准键码发送并消费待用修饰键，恢复原容器与 F(n) 标签。空编号再点、返回、ESC 或长按取消；切换功能和输入会话结束时清理。版本 5.2.2，无新增依赖。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt",
+          "notes": "键序、精简功能区、编号输入及确认取消和原键盘恢复"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt、keyboard/KeyboardManager.kt",
+          "notes": "编号输入优先路由、硬件数字及退格隔离、读取原键盘类型"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt",
+          "notes": "实际数字键触摸、功能键事件、修饰状态、中文方案、取消恢复与界面布局回归"
+        },
+        {
+          "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "版本、使用说明与记录同步"
+        }
+      ],
+      "verification": "Debug 和 Android 测试包构建通过。3 项针对性 Android 回归通过，覆盖实际数字键点按、F12 按下松开与 Alt 修饰、编号隔离、双位编号、无效编号修正、软硬件退格数字路由、中文方案保留、空编号取消、返回与长按取消、编辑键盘恢复和输入结束清理；同时复核原符号与 Alt+Enter 路由。真实 Termux 独立会话测试通过，F(n) 输入12后收到 F12 标准序列 1b 5b 32 34 7e，编辑左右、Home/End、粘贴、Ctrl+C 和 Alt+Enter 回归均通过。截图核对 TAB/ESC 顺序、F(12) 状态及数字键盘，固定功能键行已移除。Release 将从已提交源码构建。",
+      "lessons": [
+        "功能键编号输入只借用数字视图，必须在候选提交和粘滞修饰键消费之前拦截数字；确认与取消均恢复实际原容器。"
+      ],
+      "commits": {
+        "main": "未提交",
+        "yuyansdk": "ca04a53219beda521060df489f108c7d338175bf"
+      }
+    },
+    {
       "id": "20261102-01",
       "date": "2026-11-02",
       "type": "fix",
@@ -1908,7 +1943,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt",
         "role": "通用键盘顶部快捷键与转换原文面板",
-        "notes": "花漾字处理栏位于候选栏上方，终端行独立位于下方；启用后持续显示，完成清空并继续聚焦，空取消关闭模式。WATCH_OUTSIDE_TOUCH 区分宿主原始输入，内部 Popup/ActionMode 用计数保护。处理意图与活动会话分离，连接重建保留意图；本地 BaseInputConnection 始终不触发系统重绑定。"
+        "notes": "花漾字处理栏位于候选栏上方，终端行独立位于下方；启用后持续显示，完成清空并继续聚焦，空取消关闭模式。WATCH_OUTSIDE_TOUCH 区分宿主原始输入，内部 Popup/ActionMode 用计数保护。处理意图与活动会话分离，连接重建保留意图；本地 BaseInputConnection 始终不触发系统重绑定。 终端顶栏 TAB 在 ESC 前；扩展区 F(n) 保存原容器并临时显示数字视图，编号独立于宿主文本，支持1到12、退格、确认和取消，替代 INS 与固定功能键行。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt",
@@ -2163,12 +2198,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
         "role": "软键盘主视图，承载候选栏、键盘容器与弹窗，同时是按键事件的业务处理入口",
-        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存 手写走组合文本：handwritingComposing 非空表示输入框中有未落定的字，此时 chooseAndUpdate、空格、回车、退格、onUpdateSelection 均有专门分支。默认保留系统输入法导航栏，以 navigationBars/captionBar 联合 Insets 预留底部安全区；额外栏使用 padding，悬浮模式保留拖动条高度，导航图标明暗随主题更新。；语音动作转发给 ImeService；普通按键输入前取消待返回的语音会话。"
+        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存 手写走组合文本：handwritingComposing 非空表示输入框中有未落定的字，此时 chooseAndUpdate、空格、回车、退格、onUpdateSelection 均有专门分支。默认保留系统输入法导航栏，以 navigationBars/captionBar 联合 Insets 预留底部安全区；额外栏使用 padding，悬浮模式保留拖动条高度，导航图标明暗随主题更新。；语音动作转发给 ImeService；普通按键输入前取消待返回的语音会话。 F(n) 编号在候选提交和终端修饰键路由之前处理，文本、上滑数字及物理数字统一隔离，宿主触摸和菜单切换取消临时输入。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
         "role": "键盘容器的创建、缓存与切换",
-        "notes": "switchKeyboard 是唯一切换入口，:hw 进程绑定与解绑挂钩于此，release 一并解绑。clearKeyboard 同时清除根容器旧视图和 currentContainer，防止终端切换反复重建后保留旧树。语音和终端触摸回归在主线程查找真实 BaseKeyboardView。"
+        "notes": "switchKeyboard 是唯一切换入口，:hw 进程绑定与解绑挂钩于此，release 一并解绑。clearKeyboard 同时清除根容器旧视图和 currentContainer，防止终端切换反复重建后保留旧树。语音和终端触摸回归在主线程查找真实 BaseKeyboardView。 currentKeyboardType 提供当前实际容器类型；F(n) 仅临时切换 NUMBER 视图，结束恢复原类型，不修改 InputModeSwitcher。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/FullDisplayKeyboardBar.kt",
