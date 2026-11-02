@@ -3,6 +3,40 @@
   "updatedAt": "2026-11-02",
   "entries": [
     {
+      "id": "20261102-05",
+      "date": "2026-11-02",
+      "type": "chore",
+      "title": "正式发布语燕SelfOpt 5.2.3",
+      "trigger": "用户要求将已完成并更新真机的5.2.3发布到GitHub Release。",
+      "rootCause": "GitHub最新正式版仍为5.1.2，本地5.2.0至5.2.3累计改动、子模块和正式APK尚未推送发布。",
+      "solution": "先推送SDK，再推送主仓库；以APK实际源码4acc33c创建并推送selfopt-v5.2.3标签。发布说明汇总终端模式、花漾字持续面板、数字兼容和悬浮语音调整。先创建草稿上传正式APK，核对远端元数据并下载实际附件比对大小与SHA256，随后正式发布并设为最新版。",
+      "changedFiles": [
+        {
+          "path": "主仓库、yuyansdk及selfopt-v5.2.3标签",
+          "notes": "SDK与主仓库均快进推送，标签指向APK实际源码，代码未额外修改"
+        },
+        {
+          "path": "change_log.md、change_details.json",
+          "notes": "发布状态、来源提交、正式附件和最新验证发行记录同步"
+        }
+      ],
+      "verification": "沿用本次已完成的Debug/Release构建及产物校验；发布前再次核对工作区干净、SDK指针与源码一致、签名及16 KB ZIP对齐。GitHub附件66795225字节及SHA256与本地和真机更新包一致；下载附件比对通过。发布后API确认非草稿、非预发布且为latest。未声称完成用户负责的新版UU交互复测。",
+      "release": {
+        "tag": "selfopt-v5.2.3",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.3",
+        "publishedAt": "2026-11-02T05:07:08Z",
+        "sourceCommit": "4acc33c24e0e3a406f987be274d5a5d96047842c",
+        "sdkCommit": "3c803c0fc9a80b39cad93840d688623210503e80",
+        "artifact": "yuyanSelfOpt_5.2.3_release.apk",
+        "size": 66795225,
+        "sha256": "3bfbad6632b23c64c732501c34dfd76a6f7ce728ca34603875ac808c63202836"
+      },
+      "commits": {
+        "main": "4acc33c24e0e3a406f987be274d5a5d96047842c",
+        "yuyansdk": "3c803c0fc9a80b39cad93840d688623210503e80"
+      }
+    },
+    {
       "id": "20261102-04",
       "date": "2026-11-02",
       "type": "fix",
@@ -1959,13 +1993,13 @@
         "configureCommand": "cmake -S tmp_rime_jni -B tmp_rime_jni/build -G Ninja -DCMAKE_MAKE_PROGRAM=<sdk>/cmake/3.31.6/bin/ninja.exe -DCMAKE_TOOLCHAIN_FILE=<sdk>/ndk/28.2.13676358/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release"
       },
       "latestVerifiedRelease": {
-        "tag": "selfopt-v5.1.2",
-        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.1.2",
-        "mainCommit": "101897c1b526c31722ff2e7e948c746d0dc5207b",
-        "sdkCommit": "381a80c27bd494052164ae67b5d80e557596e138",
-        "artifact": "yuyanSelfOpt_5.1.2_release.apk",
-        "sha256": "b6e897407492bc7dd1c0a933e50585006a77d007e897ee47b066b60796bb0009",
-        "verification": "2026-10-31 从干净且已提交源码重建；签名、版本、源码标识、ZIP 完整性、16 KB ZIP 对齐及无测试密钥检查通过，远端附件大小和 SHA256 一致。"
+        "tag": "selfopt-v5.2.3",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.3",
+        "mainCommit": "4acc33c24e0e3a406f987be274d5a5d96047842c",
+        "sdkCommit": "3c803c0fc9a80b39cad93840d688623210503e80",
+        "artifact": "yuyanSelfOpt_5.2.3_release.apk",
+        "sha256": "3bfbad6632b23c64c732501c34dfd76a6f7ce728ca34603875ac808c63202836",
+        "verification": "2026-11-02从已提交源码构建的正式APK已通过签名、版本、源码标识、ZIP完整性和16 KB ZIP对齐；GitHub远端附件元数据及实际下载文件的大小和SHA256一致，发布后确认稳定正式版且为latest。"
       }
     },
     "codeMap": [
