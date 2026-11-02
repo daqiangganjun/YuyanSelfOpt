@@ -3,6 +3,37 @@
   "updatedAt": "2026-11-02",
   "entries": [
     {
+      "id": "20261102-03",
+      "date": "2026-11-02",
+      "type": "fix",
+      "title": "终端扩展区仅保留单行功能键，维持版本 5.2.2 重打包",
+      "trigger": "用户要求原 F1–F12 两行直接删除，不用其他内容填充，保持版本号不变并重新打包。",
+      "rootCause": "固定功能键行虽已移除，下面的代码符号行仍会顶到原位置，且 ScrollView 固定132dp，展开后仍显示三行高度。",
+      "solution": "移除扩展区代码符号行及滚动容器，仅保留 SHIFT、DEL、F(n)、^C、^D、^Z、^L 单行。容器高度按内容计算，不保留两行占位；菜单名称同步为功能键。F(n) 临时数字键盘与确认恢复逻辑保留。版本仍为5.2.2，无依赖变更。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt",
+          "notes": "删除符号行和固定高度滚动容器，仅保留单行功能键"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt",
+          "notes": "更新菜单定位与扩展区按钮清单，防止重新填充多余行"
+        },
+        {
+          "path": "README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "同步单行功能区说明和重打包记录，不修改版本配置"
+        }
+      ],
+      "verification": "Debug 与 Android 测试包构建通过。官方 Android 15、16 KB 环境的2项针对性回归通过，覆盖扩展区仅保留14个顶栏与单行功能键按钮、F(n) 逐键编号与 Alt+F12 事件、确认恢复、编号修改、取消及中文方案保留；截图核对下方直接接数字键盘，无额外符号行和两行占位。版本配置未修改。Release 将从已提交源码重建。",
+      "lessons": [
+        "删除行内容时也要移除固定可视高度和后续填充内容，避免滚动容器把其他行顶到原位置。"
+      ],
+      "commits": {
+        "main": "未提交",
+        "yuyansdk": "f7ae54ce6fc50150caaa1c54c33b516f6f8d8576"
+      }
+    },
+    {
       "id": "20261102-02",
       "date": "2026-11-02",
       "type": "feat",
@@ -1950,7 +1981,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt",
         "role": "通用键盘顶部快捷键与转换原文面板",
-        "notes": "花漾字处理栏位于候选栏上方，终端行独立位于下方；启用后持续显示，完成清空并继续聚焦，空取消关闭模式。WATCH_OUTSIDE_TOUCH 区分宿主原始输入，内部 Popup/ActionMode 用计数保护。处理意图与活动会话分离，连接重建保留意图；本地 BaseInputConnection 始终不触发系统重绑定。 终端顶栏 TAB 在 ESC 前；扩展区 F(n) 保存原容器并临时显示数字视图，编号独立于宿主文本，支持1到12、退格、确认和取消，替代 INS 与固定功能键行。"
+        "notes": "花漾字处理栏位于候选栏上方，终端行独立位于下方；启用后持续显示，完成清空并继续聚焦，空取消关闭模式。WATCH_OUTSIDE_TOUCH 区分宿主原始输入，内部 Popup/ActionMode 用计数保护。处理意图与活动会话分离，连接重建保留意图；本地 BaseInputConnection 始终不触发系统重绑定。 终端顶栏 TAB 在 ESC 前；扩展区 F(n) 保存原容器并临时显示数字视图，编号独立于宿主文本，支持1到12、退格、确认和取消，替代 INS 与固定功能键行。 扩展区仅保留单行功能键，按内容计算高度，不显示额外符号行。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt",

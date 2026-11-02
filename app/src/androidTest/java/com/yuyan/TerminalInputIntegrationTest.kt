@@ -196,8 +196,8 @@ class TerminalInputIntegrationTest {
         lateinit var original: com.yuyan.imemodule.keyboard.container.BaseContainer
         instrumentation.runOnMainSync {
             val labels = descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().map { it.text.toString() }.toList()
-            assertEquals(listOf("TAB", "ESC"), labels.take(2))
-            assertFalse(labels.any { it == "INS" || it.matches(Regex("F(?:[1-9]|1[0-2])")) })
+            assertEquals(listOf("TAB", "ESC", "CTRL", "ALT", "PGUP", "PGDN", "更多",
+                "SHIFT", "DEL", "F(n)", "^C", "^D", "^Z", "^L"), labels)
             original = requireNotNull(KeyboardManager.instance.currentContainer)
             input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT)
         }
@@ -293,7 +293,7 @@ class TerminalInputIntegrationTest {
         }
         var bounds = android.graphics.Rect()
         awaitCondition("The terminal functions menu must open") {
-            val item = instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("代码符号与功能键")?.firstOrNull()
+            val item = instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("功能键")?.firstOrNull()
             item?.getBoundsInScreen(bounds)
             item != null && !bounds.isEmpty
         }
