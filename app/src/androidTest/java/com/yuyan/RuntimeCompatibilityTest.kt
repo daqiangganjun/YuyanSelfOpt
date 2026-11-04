@@ -371,13 +371,16 @@ class RuntimeCompatibilityTest {
         }
         assertEquals("Handwriting process must stop after release", -1, handwritingPid())
         states.clear()
+        val coldResults = LinkedBlockingQueue<List<String>>()
         instrumentation.runOnMainSync {
             HandwritingClient.acquire(context)
             acquired = true
+            HandwritingClient.recognize(horizontalStroke()) { coldResults.offer(it.toList()) }
         }
         awaitState(30_000) { it == HandwritingState.Downloaded }
         assertNotEquals("Handwriting must start a new process", originalPid, handwritingPid())
-        assertHorizontalStrokeRecognized()
+        assertTrue("A request sent before service initialization must not be lost",
+            coldResults.poll(30, TimeUnit.SECONDS)?.contains("一") == true)
     }
 
     private fun handwritingPid(): Int = context.getSystemService(ActivityManager::class.java)
@@ -396,12 +399,16 @@ class RuntimeCompatibilityTest {
         throw AssertionError("Handwriting state timed out: ${HandwritingClient.state}")
     }
 
-    private fun assertHorizontalStrokeRecognized() {
+    private fun horizontalStroke(): InkStrokes {
         val started = SystemClock.uptimeMillis()
-        val ink = InkStrokes().apply {
+        return InkStrokes().apply {
             repeat(25) { index -> addPoint(30f + index * 10f, 120f, started + index * 8) }
             endStroke()
         }
+    }
+
+    private fun assertHorizontalStrokeRecognized() {
+        val ink = horizontalStroke()
         val results = LinkedBlockingQueue<List<String>>()
         instrumentation.runOnMainSync {
             HandwritingClient.recognize(ink) { results.offer(it.toList()) }

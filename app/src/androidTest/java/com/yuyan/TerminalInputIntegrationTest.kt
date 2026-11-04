@@ -1089,9 +1089,147 @@ class TerminalInputIntegrationTest {
         }
     }
 
+    @Test
+    fun handwritingPausePreviewsAndSelectionReplacesWithoutDuplication() = withHandwriting { input, editor, keyboard ->
+        drawHandwritingStroke(keyboard, .12f, .3f, .65f, .3f)
+        awaitCondition("Pausing must display the first handwriting candidate") { editor.text.isNotEmpty() }
+        var selected = ""
+        instrumentation.runOnMainSync {
+            val candidates = com.yuyan.imemodule.service.DecodingInfo.candidates
+            assertTrue("Handwriting candidates must remain available without prediction", candidates.isNotEmpty())
+            assertEquals(candidates.first().text, editor.text.toString())
+            assertTrue("The first candidate must remain replaceable", BaseInputConnection.getComposingSpanStart(editor.text) >= 0)
+            val index = if (candidates.size > 1) 1 else 0
+            selected = candidates[index].text
+            input.chooseAndUpdate(index)
+        }
+        awaitCondition("Choosing must replace the preview exactly once") {
+            editor.text.toString() == selected && BaseInputConnection.getComposingSpanStart(editor.text) == -1
+        }
+        drawHandwritingStroke(keyboard, .12f, .3f, .65f, .3f)
+        awaitCondition("A second character must append its own preview") {
+            val first = com.yuyan.imemodule.service.DecodingInfo.getCandidate(0)?.text
+            first != null && editor.text.toString() == selected + first
+        }
+        saveUiSnapshot("tmp_handwriting_preview.png")
+    }
+
+    @Test
+    fun handwritingStrokeCanEndOverSpaceAndSpaceStillWorksAsAButton() = withHandwriting { input, editor, keyboard ->
+        drawHandwritingStroke(keyboard, .4f, .12f, .5f, .91f)
+        awaitCondition("Ending a stroke over a bottom key must still recognize and preview") { editor.text.isNotBlank() }
+        var committed = ""
+        instrumentation.runOnMainSync {
+            committed = com.yuyan.imemodule.service.DecodingInfo.getCandidate(0)!!.text
+            input.chooseAndUpdate(0)
+        }
+        awaitCondition("The crossing stroke must commit once") { editor.text.toString() == committed }
+        tapKeyboardKey(input, KeyEvent.KEYCODE_SPACE)
+        awaitCondition("A fresh tap on space must retain its button action") { editor.text.toString() == committed + " " }
+    }
+
+    @Test
+    fun handwritingHeldStrokeAndCancelNeverSubmitPartialInk() = withHandwriting { input, editor, keyboard ->
+        instrumentation.runOnMainSync { AppPrefs.getInstance().handwriting.handWritingSpeed.setValue(1300) }
+        drawHandwritingStroke(keyboard, .12f, .25f, .65f, .25f)
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_DOWN, .12f, .45f)
+        Thread.sleep(1450)
+        instrumentation.runOnMainSync {
+            assertEquals("An active stroke must cancel the previous pause timer", "", editor.text.toString())
+        }
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_CANCEL, .12f, .45f)
+        Thread.sleep(1500)
+        instrumentation.runOnMainSync {
+            assertFalse(keyboard.hasHandwritingInput)
+            assertEquals("Cancelled ink must not be committed", "", editor.text.toString())
+            assertTrue(com.yuyan.imemodule.service.DecodingInfo.isCandidatesEmpty)
+            AppPrefs.getInstance().handwriting.handWritingSpeed.setValue(300)
+        }
+        drawHandwritingStroke(keyboard, .12f, .3f, .65f, .3f)
+        awaitCondition("The keyboard must recover after cancellation") { editor.text.isNotEmpty() }
+        tapKeyboardKey(input, KeyEvent.KEYCODE_DEL)
+        awaitCondition("Backspace must retract the handwriting preview") { editor.text.isEmpty() && !keyboard.hasHandwritingInput }
+        Thread.sleep(600)
+        instrumentation.runOnMainSync { assertTrue("Deleted ink must not return", editor.text.isEmpty()) }
+    }
+
+    @Test
+    fun handwritingFailureFeedbackIsVisibleButCannotBecomeInput() = withHandwriting { input, editor, _ ->
+        listOf(com.yuyan.imemodule.handwriting.HandwritingResult.Empty,
+            com.yuyan.imemodule.handwriting.HandwritingResult.Failed,
+            com.yuyan.imemodule.handwriting.HandwritingResult.TimedOut,
+            com.yuyan.imemodule.handwriting.HandwritingResult.Unavailable).forEach { failure ->
+            instrumentation.runOnMainSync { input.showHandwritingResult(failure, false) }
+            awaitCondition("Recognition failures must remain visible in the candidate bar") {
+                descendants(input).filterIsInstance<android.widget.TextView>().any {
+                    it.isShown && (it.text.contains("重新书写") || it.text.contains("模型未就绪"))
+                }
+            }
+            instrumentation.runOnMainSync {
+                assertTrue("Feedback must not enter the candidate data", com.yuyan.imemodule.service.DecodingInfo.isCandidatesEmpty)
+                input.chooseAndUpdate(0)
+                assertEquals("Feedback must not be selectable", "", editor.text.toString())
+            }
+        }
+        instrumentation.runOnMainSync { input.cancelHandwritingInput() }
+    }
+
+    private fun withHandwriting(block: (InputView, EditText, com.yuyan.imemodule.keyboard.HandwritingKeyboard) -> Unit) = withKeyboard { input, editor ->
+        val speed = AppPrefs.getInstance().handwriting.handWritingSpeed
+        val prediction = AppPrefs.getInstance().input.chinesePrediction
+        val oldSpeed = speed.getValue()
+        val oldPrediction = prediction.getValue()
+        try {
+            instrumentation.runOnMainSync {
+                speed.setValue(500)
+                prediction.setValue(false)
+                input.onWindowShown()
+                InputModeSwitcher.saveInputMode(InputModeSwitcher.MODE_HANDWRITING_CHINESE)
+                KeyboardManager.instance.switchKeyboard()
+                input.cancelHandwritingInput()
+                editor.text.clear()
+            }
+            awaitCondition("The handwriting model must be available for real touch regression") {
+                com.yuyan.imemodule.handwriting.HandwritingClient.isReady
+            }
+            val keyboard = requireNotNull(KeyboardManager.instance.handwritingKeyboard)
+            awaitCondition("The handwriting keyboard must be laid out") { keyboard.isShown && keyboard.width > 0 && keyboard.height > 0 }
+            block(input, editor, keyboard)
+        } finally {
+            instrumentation.runOnMainSync {
+                input.cancelHandwritingInput()
+                speed.setValue(oldSpeed)
+                prediction.setValue(oldPrediction)
+                input.onWindowShown()
+            }
+        }
+    }
+
+    private fun drawHandwritingStroke(keyboard: View, startX: Float, startY: Float, endX: Float, endY: Float) {
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_DOWN, startX, startY)
+        repeat(20) { index ->
+            val fraction = (index + 1) / 20f
+            sendHandwritingTouch(keyboard, MotionEvent.ACTION_MOVE,
+                startX + (endX - startX) * fraction, startY + (endY - startY) * fraction)
+            Thread.sleep(8)
+        }
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_UP, endX, endY)
+    }
+
+    private var handwritingDownTime = 0L
+    private fun sendHandwritingTouch(keyboard: View, action: Int, x: Float, y: Float) {
+        instrumentation.runOnMainSync {
+            val now = SystemClock.uptimeMillis()
+            if (action == MotionEvent.ACTION_DOWN) handwritingDownTime = now
+            val event = MotionEvent.obtain(handwritingDownTime, now, action, keyboard.width * x, keyboard.height * y, 0)
+            try { assertTrue("The handwriting gesture must be consumed", keyboard.dispatchTouchEvent(event)) }
+            finally { event.recycle() }
+        }
+    }
+
     private fun withKeyboard(block: (InputView, EditText) -> Unit) {
-        val previousIme = shell("settings get secure default_input_method")
-        val previousEnabled = shell("settings get secure enabled_input_methods")
+        val previousIme = shell("settings get secure default_input_method").trim('\'', '"')
+        val previousEnabled = shell("settings get secure enabled_input_methods").trim('\'', '"')
         val preferences = PreferenceManager.getDefaultSharedPreferences(context)
         val suggestionKey = AppPrefs.getInstance().clipboard.clipboardSuggestion.key
         val keys = listOf("input_default_method_mode", "input_method_pinyin_mode", "input_method_pinyin_mode_rime", "flower_typeface_mode", "last_flower_typeface_mode", suggestionKey)
@@ -1156,8 +1294,8 @@ class TerminalInputIntegrationTest {
                 val mode = (previous["input_default_method_mode"] as? Int) ?: InputModeSwitcher.MODE_T9_CHINESE
                 InputModeSwitcher.saveInputMode(mode)
             }
-            shell("settings put secure enabled_input_methods '$previousEnabled'")
-            shell("settings put secure default_input_method '$previousIme'")
+            shell("settings put secure enabled_input_methods $previousEnabled")
+            shell("settings put secure default_input_method $previousIme")
         }
     }
 

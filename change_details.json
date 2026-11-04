@@ -1,7 +1,49 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-03",
+  "updatedAt": "2026-11-04",
   "entries": [
+    {
+      "id": "20261104-01",
+      "date": "2026-11-04",
+      "type": "fix",
+      "title": "修复手写识别反馈、停笔上屏与跨按键书写，版本5.2.6",
+      "trigger": "用户反馈手写无候选、识别结果不上屏、下一字才上屏、旧结果滞后及底部按键截断笔画，要求全部修复、测试、打包并提交。已有5.2.4和5.2.5改动按用户要求先独立提交。",
+      "rootCause": "识别空结果与失败无回包，冷启动丢弃未就绪请求；停笔定时器无条件置已组合标记，迟到结果只更新候选；请求只在抬手递增，选词与生命周期未失效；每个触摸事件重新命中按键，跨键抬手漏采集；延时使用1200减设置值，会产生零或负延时；提前选词没有清理笔迹。",
+      "solution": "新增按字管理的HandwritingSession，分离笔画版本、停笔、候选、可改选预览和正式提交；连续字按顺序处理，选词、取消与离开输入目标使请求失效。客户端按请求回调、取消及10秒超时，服务返回空结果、失败和未就绪状态，冷启动排队。候选栏独立显示不可提交提示。落笔确定整笔归属，允许跨底部按键；仅抬手启动停笔计时，按设置毫秒值执行。保持ML Kit独立进程及现有JNI数据结构。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/",
+          "notes": "按字状态、请求取消与超时、冷启动排队和明确结果协议。"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/HandwritingKeyboard.kt、InputView.kt、KeyboardManager.kt、container/HandwritingContainer.kt",
+          "notes": "整笔触摸归属、自动组合文本、改选及撤销、生命周期与输入目标隔离。"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt、callback/IResponseKeyEvent.kt、inputmethod/MlKitHandwritingModel.kt、res/values/strings.xml",
+          "notes": "不可上屏状态提示、清理旧回调入口、识别器初始化失败反馈。"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/HandwritingSessionTest.kt、RuntimeCompatibilityTest.kt、TerminalInputIntegrationTest.kt",
+          "notes": "异步乱序和迟到、冷启动请求、实际触摸与输入框回归；修复测试恢复输入法设置时写入字面引号的问题。"
+        },
+        {
+          "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "版本5.2.6/50206与既有说明同步，SDK忽略生成的lint报告。"
+        }
+      ],
+      "verification": "39项针对性测试通过：10项手写异步时序、8项运行兼容、21项实际输入回归（含4项新增手写交互）；手写服务重启后的冷启动立即请求另行通过。测试使用Android 15、16KB页面且支持ARM64转换的独立模拟器。覆盖停笔预览、候选替换不重复、跨底部按键抬手、普通按键保持可用、持笔期间不误清空、取消和退格撤销、不可提交反馈、关闭联想时保留候选，以及花漾字和终端修饰键等既有路径。2项依赖完整中文方案切换或实际Termux环境的既有测试未执行。初次界面测试遇到系统UI无响应弹窗及旧测试恢复设置时的字面引号，恢复环境并修复测试后整组21项重跑通过。Debug、测试APK和R8压缩Release构建通过，版本5.2.6/50206，Release v1/v2签名及16KB ZIP对齐通过。最终安装包从提交后的源码重新构建，输出位于app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.6_release.apk；未发布到GitHub。",
+      "commits": {
+        "main": "本条所在提交",
+        "yuyansdk": "1470aa2"
+      },
+      "lessons": [
+        "候选状态提示不能加入可提交候选数据，否则空格、自动上屏或选词会误提交提示文字。",
+        "同一字的笔画修订与不同字的提交顺序需要分别管理；只检查最新请求编号不能覆盖落笔到抬手之间的竞态。",
+        "停笔定时器必须在新落笔时取消，只有最后一笔的最终结果才能生成组合文本。",
+        "Android UiAutomation.executeShellCommand不等同于经过shell解析；恢复无空格的输入法ID时不能添加字面引号。"
+      ]
+    },
     {
       "id": "20261103-02",
       "date": "2026-11-03",
@@ -18,7 +60,7 @@
         { "path": "app/src/androidTest/java/com/yuyan/RuntimeCompatibilityTest.kt、TerminalInputIntegrationTest.kt", "notes": "符号像素边界居中、拉伸后的列表对齐、旧主题读写、编辑器真实滑动、取消、切换和预览复用回归。" }
       ],
       "verification": "Debug、测试APK和R8压缩Release构建通过；19项针对性输入与主题回归全部通过，包括4项新增测试：不同尺寸符号像素居中、拉伸后符号区边界对齐、旧主题及蒙版保存恢复、编辑器真实拖动与取消、切换深浅按键和预览对象复用。保留排除3项依赖完整中文方案切换或真实Termux环境的既有用例。APK元数据为5.2.5/50205，v1/v2签名及16KB ZIP对齐通过；SDK lint仍为1项既有EmojiCompat.reset错误、110项警告和2项提示，未新增错误。产物为app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.5_release.apk，未安装真机或发布到GitHub；模拟器输入法设置已恢复。",
-      "commits": { "main": null, "yuyansdk": null },
+      "commits": { "main": "08111c2", "yuyansdk": "8b0500c" },
       "lessons": [
         "符号视觉居中需要同时验证容器几何和字形像素边界；仅设置gravity=center不能纠正自定义Canvas绘制的度量偏差。",
         "新增外观参数优先复用已有颜色字段，避免改变旧主题格式；滑块初始化时不能把历史各类按键不同的透明度强制归一。",
@@ -42,7 +84,7 @@
         { "path": "README.md、change_log.md、change_details.json", "notes": "最小同步界面行为和开发验证记录。" }
       ],
       "verification": "Debug、测试APK与R8压缩Release构建通过。模拟器15项针对性输入集成测试通过，包括原文点击定位、中间插入删除、多行编辑、光标像素明暗变化、宿主焦点保留、分段提交、宿主切换、符号分类切换及圆角、普通与悬浮键盘拉伸。未运行依赖真实Termux或完整中文方案切换的3项环境相关用例。APK元数据为5.2.4/50204，v1/v2签名和16KB ZIP对齐校验通过。SDK lint剩余1项既有EmojiCompat.reset私有接口错误、110项警告及2项提示；没有宣称lint零错误。产物为app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.4_release.apk，未安装真机或发布到GitHub。模拟器默认输入法和启用列表已恢复。",
-      "commits": { "main": null, "yuyansdk": null },
+      "commits": { "main": "08111c2", "yuyansdk": "8b0500c" },
       "lessons": [
         "IME内部编辑框不应抢占宿主窗口或注册第二个系统输入目标；需要显式保留触摸焦点，并为无窗口焦点状态提供局部光标行为。",
         "光标的定时刷新须在关闭编辑、隐藏或分离时停止，避免输入法常驻后持续刷新。",
@@ -2052,6 +2094,16 @@
     },
     "codeMap": [
       {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingSession.kt",
+        "role": "按字隔离的手写输入状态",
+        "notes": "当前字管理笔画修订和停笔预览，已结束的字按书写顺序提交；返回较晚的旧字不能覆盖当前字候选。取消、选词与外部输入边界统一清理。"
+      },
+      {
+        "path": "app/src/androidTest/java/com/yuyan/HandwritingSessionTest.kt",
+        "role": "手写异步时序回归",
+        "notes": "通过可控识别回调制造迟到、乱序、取消和空结果，验证预览与提交输出；真实触摸和输入框验证位于TerminalInputIntegrationTest。"
+      },
+      {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/Theme.kt",
         "role": "内置和自定义主题的颜色与图片配置",
         "notes": "自定义键帽蒙版复用keyBackgroundColor、functionKeyBackgroundColor、accentKeyBackgroundColor的alpha，keyBackgroundOpacity为不序列化的计算属性。旧主题各字段原值保持不变，只有用户调节才统一alpha。"
@@ -2114,7 +2166,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/HandwritingKeyboard.kt",
         "role": "手写笔迹采集和普通键盘触摸共用视图",
-        "notes": "继承 TextKeyboard，仅在中文手写布局处理笔迹，其余布局转交普通按键处理；本轮没有改变识别或笔迹方案。"
+        "notes": "中文手写在ACTION_DOWN确定整笔归属；允许滑入底部键面，UP结束采集与启动停笔计时，CANCEL不提交。使用事件单调时间与实际设置延时；HandwritingSession负责识别状态。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/HandwritingContainer.kt",
@@ -2439,12 +2491,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingService.kt",
         "role": ":hw 进程服务，承载全部 ML Kit 调用",
-        "notes": "onCreate 手动初始化 MlKit 与 WorkManager（自动初始化已在 manifest 移除）；onDestroy 中 killProcess，否则解绑后只是变成空进程滞留 LRU，内存不归还"
+        "notes": "仅在:hw进程初始化ML Kit和WorkManager，解绑销毁进程。冷启动缓存识别请求，可取消；成功空结果和异常均回包，笔迹数组严格验证。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingClient.kt",
         "role": "主进程侧代理，引用计数绑定 :hw",
-        "notes": "手写键盘与手写设置页均可持有；Downloading 期间延后解绑以免中断下载；模型状态缓存于 SharedPreferences，避免绑定完成前提示框闪烁"
+        "notes": "引用计数绑定，下载中延后解绑；按请求保存独立回调，取消与10秒超时清理请求，断连明确反馈。模型缓存仅供初始展示，识别服务冷启动负责排队。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/HandwritingModelTipView.kt",
