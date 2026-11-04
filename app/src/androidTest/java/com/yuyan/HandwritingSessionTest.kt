@@ -104,6 +104,22 @@ class HandwritingSessionTest {
         assertEquals(listOf("你", "好"), f.commits)
     }
 
+    @Test fun selectingBehindPendingRecognitionReleasesWritingAndPreservesOrder() {
+        val f = Fixture()
+        f.stroke()
+        assertTrue(f.session.isWriting)
+        f.session.stopWriting()
+        assertFalse(f.session.isWriting)
+        f.stroke()
+        f.requests[1].answer("好", "号")
+        assertTrue(f.session.choose(1))
+        assertTrue("The previous character must still await recognition", f.session.hasInput)
+        assertFalse("Queued commits must not keep controls locked", f.session.isWriting)
+        f.requests[0].answer("你")
+        assertEquals(listOf("你", "号"), f.commits)
+        assertFalse(f.session.hasInput)
+    }
+
     @Test fun selectingBeforePauseStartsAnIndependentCharacter() {
         val f = Fixture()
         f.stroke()

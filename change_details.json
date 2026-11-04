@@ -3,6 +3,39 @@
   "updatedAt": "2026-11-04",
   "entries": [
     {
+      "id": "20261104-03",
+      "date": "2026-11-04",
+      "type": "fix",
+      "title": "连续手写期间锁定按键与符号，版本5.2.7",
+      "trigger": "用户反馈第一笔后持续书写时，后续落笔可能位于按钮区域并误触符号，要求停笔上屏触发前所有输入法按钮不响应点击。",
+      "rootCause": "5.2.6按单次DOWN至UP保护跨键移动，新的DOWN仍重新命中按键；右侧符号与候选工具栏是手写键盘以外的控件，单改键盘onTouchEvent无法拦截。原触摸回归直接向键盘子视图发送事件，未覆盖完整兄弟控件分发。",
+      "solution": "HandwritingSession公开当前字是否仍在连续书写；HandwritingKeyboard按事件时间判断停笔边界，停笔前无论后续落笔命中何键均采集笔画。InputView在分发入口捕获整个续写手势，转换坐标后交给手写视图，阻止底部键、独立侧边符号和候选工具栏处理点击；达到停笔时间、取消或离开输入后恢复正常操作。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingSession.kt、keyboard/HandwritingKeyboard.kt、keyboard/InputView.kt",
+          "notes": "按字连续书写状态、停笔期限判断和全输入法触摸分发保护。"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/HandwritingSessionTest.kt、TerminalInputIntegrationTest.kt",
+          "notes": "后续落笔覆盖各按钮、独立符号栏、候选工具栏；停笔和取消解锁；待提交队列不误锁。既有手写触摸回归改经InputView完整分发。"
+        },
+        {
+          "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "版本5.2.7/50207及连续书写按钮行为说明同步。"
+        }
+      ],
+      "verification": "42项回归通过（11项手写会话、8项运行兼容、23项界面输入），均在Android 15、16KB页面且支持ARM64转换的独立模拟器执行。新增覆盖整字期间底部各键、独立侧边符号和候选工具栏不可点击，停笔与取消后按钮恢复；已选字等待前字结果时不锁定按钮。既有预览、改选、删除及跨键书写改经InputView完整分发。首轮一项预览超时未能稳定复现，补充状态诊断后两项定向复测与42项整组重跑通过；再补充布局稳定等待，最终23项界面回归全部通过。2项依赖完整中文方案切换或实际Termux环境的既有测试未执行。Debug及测试APK构建通过，正式包从提交后的源码构建，最终包校验与发行结果另记。",
+      "commits": {
+        "main": "本条所在提交",
+        "yuyansdk": "5455049"
+      },
+      "lessons": [
+        "连续书写跨越多个DOWN至UP手势，锁定范围应持续到本字停笔，而不是单笔抬手。",
+        "候选工具栏和侧边符号可能绕过手写子视图，必须从共同父级分发入口验证触摸路由。",
+        "已选字仍在等待前字识别时，待提交队列非空不代表仍在书写，不能据此锁住按钮。"
+      ]
+    },
+    {
       "id": "20261104-02",
       "date": "2026-11-04",
       "type": "chore",
@@ -688,7 +721,7 @@
       ],
       "commits": {
         "main": "70dce573dc8f31a2248eaea9436eef9fe824a13c",
-        "yuyansdk": null
+        "yuyansdk": "5455049"
       }
     },
     {
@@ -2131,7 +2164,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingSession.kt",
         "role": "按字隔离的手写输入状态",
-        "notes": "当前字管理笔画修订和停笔预览，已结束的字按书写顺序提交；返回较晚的旧字不能覆盖当前字候选。取消、选词与外部输入边界统一清理。"
+        "notes": "当前字管理笔画修订、连续书写锁定和停笔预览，已结束的字按书写顺序提交；返回较晚的旧字不能覆盖当前字候选。isWriting只表示当前字未停笔，已选择但尚在等待提交的字不锁住按钮。取消、选词与外部输入边界统一清理。"
       },
       {
         "path": "app/src/androidTest/java/com/yuyan/HandwritingSessionTest.kt",
@@ -2201,7 +2234,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/HandwritingKeyboard.kt",
         "role": "手写笔迹采集和普通键盘触摸共用视图",
-        "notes": "中文手写在ACTION_DOWN确定整笔归属；允许滑入底部键面，UP结束采集与启动停笔计时，CANCEL不提交。使用事件单调时间与实际设置延时；HandwritingSession负责识别状态。"
+        "notes": "首笔在书写区启动，停笔期限前的后续DOWN沿用书写状态，允许落在按钮区域；InputView将侧边符号和工具栏事件转换坐标后统一转发。UP启动停笔计时，CANCEL不提交；按事件单调时间判断到期，避免定时消息延迟导致多锁一笔。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/HandwritingContainer.kt",

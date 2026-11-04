@@ -1092,7 +1092,12 @@ class TerminalInputIntegrationTest {
     @Test
     fun handwritingPausePreviewsAndSelectionReplacesWithoutDuplication() = withHandwriting { input, editor, keyboard ->
         drawHandwritingStroke(keyboard, .12f, .3f, .65f, .3f)
-        awaitCondition("Pausing must display the first handwriting candidate") { editor.text.isNotEmpty() }
+        awaitCondition("Pausing must display the first handwriting candidate", {
+            diagnostics(input, editor) + "; ink=" + keyboard.hasHandwritingInput +
+                "; model=" + com.yuyan.imemodule.handwriting.HandwritingClient.state +
+                "; candidates=" + com.yuyan.imemodule.service.DecodingInfo.candidates +
+                "; views=" + descendants(input).filterIsInstance<TextView>().filter { it.isShown }.joinToString { it.text.toString() }
+        }) { editor.text.isNotEmpty() }
         var selected = ""
         instrumentation.runOnMainSync {
             val candidates = com.yuyan.imemodule.service.DecodingInfo.candidates
@@ -1126,6 +1131,58 @@ class TerminalInputIntegrationTest {
         awaitCondition("The crossing stroke must commit once") { editor.text.toString() == committed }
         tapKeyboardKey(input, KeyEvent.KEYCODE_SPACE)
         awaitCondition("A fresh tap on space must retain its button action") { editor.text.toString() == committed + " " }
+    }
+
+    @Test
+    fun handwritingContinuationLocksBottomSidebarAndToolbarUntilPause() = withHandwriting { input, editor, keyboard ->
+        instrumentation.runOnMainSync { AppPrefs.getInstance().handwriting.handWritingSpeed.setValue(1300) }
+        drawHandwritingStroke(keyboard, .12f, .3f, .65f, .3f)
+        val container = KeyboardManager.instance.currentContainer
+        val controls = listOf(
+            .08f to .9f, .25f to .9f, .5f to .9f, .74f to .9f, .92f to .9f,
+            .92f to .64f, .92f to .12f, .92f to .4f, .2f to -.08f, .94f to -.08f,
+        )
+        controls.forEach { (x, y) ->
+            sendHandwritingTouch(keyboard, MotionEvent.ACTION_DOWN, x, y)
+            sendHandwritingTouch(keyboard, MotionEvent.ACTION_UP, x, y)
+            instrumentation.runOnMainSync {
+                assertSame("A continuation starting over a control must not switch panels", container, KeyboardManager.instance.currentContainer)
+                assertTrue("Chinese handwriting mode must remain active", InputModeSwitcher.isChineseHandWriting)
+                assertTrue("Every continuation must keep the current character open", keyboard.canContinueWriting(SystemClock.uptimeMillis()))
+                assertEquals("Controls and candidates must not commit during continuous writing", "", editor.text.toString())
+                assertTrue("The keyboard close control must be blocked", input.isShown)
+            }
+        }
+        awaitCondition("The pause deadline must release the controls") { !keyboard.canContinueWriting(SystemClock.uptimeMillis()) }
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_DOWN, .08f, .9f)
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_UP, .08f, .9f)
+        awaitCondition("The symbol button must work again after pausing") {
+            KeyboardManager.instance.currentContainer is com.yuyan.imemodule.keyboard.container.SymbolContainer
+        }
+    }
+
+    @Test
+    fun handwritingSecondStrokeCanStartOnTheIndependentSymbolSidebar() = withHandwriting { input, editor, keyboard ->
+        instrumentation.runOnMainSync { AppPrefs.getInstance().handwriting.handWritingSpeed.setValue(1300) }
+        drawHandwritingStroke(keyboard, .12f, .3f, .65f, .3f)
+        val container = KeyboardManager.instance.currentContainer
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_DOWN, .92f, .12f)
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_MOVE, .75f, .25f)
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_MOVE, .55f, .5f)
+        instrumentation.runOnMainSync {
+            assertSame(container, KeyboardManager.instance.currentContainer)
+            assertEquals("Starting over the sidebar must not insert its punctuation", "", editor.text.toString())
+            assertTrue(keyboard.canContinueWriting(SystemClock.uptimeMillis()))
+        }
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_CANCEL, .55f, .5f)
+        instrumentation.runOnMainSync {
+            assertFalse("Cancellation must release the writing lock", keyboard.canContinueWriting(SystemClock.uptimeMillis()))
+            assertFalse(keyboard.hasHandwritingInput)
+            assertEquals("Cancelled continuation must not commit", "", editor.text.toString())
+        }
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_DOWN, .92f, .12f)
+        sendHandwritingTouch(keyboard, MotionEvent.ACTION_UP, .92f, .12f)
+        awaitCondition("The independent sidebar must accept taps after cancellation") { editor.text.isNotEmpty() }
     }
 
     @Test
@@ -1193,7 +1250,11 @@ class TerminalInputIntegrationTest {
                 com.yuyan.imemodule.handwriting.HandwritingClient.isReady
             }
             val keyboard = requireNotNull(KeyboardManager.instance.handwritingKeyboard)
-            awaitCondition("The handwriting keyboard must be laid out") { keyboard.isShown && keyboard.width > 0 && keyboard.height > 0 }
+            awaitCondition("The handwriting hierarchy must finish layout before coordinate-based input") {
+                keyboard.isShown && keyboard.width > 0 && keyboard.height > 0 &&
+                    !keyboard.isLayoutRequested && !(keyboard.parent as View).isLayoutRequested && !input.isLayoutRequested
+            }
+            instrumentation.waitForIdleSync()
             block(input, editor, keyboard)
         } finally {
             instrumentation.runOnMainSync {
@@ -1221,8 +1282,17 @@ class TerminalInputIntegrationTest {
         instrumentation.runOnMainSync {
             val now = SystemClock.uptimeMillis()
             if (action == MotionEvent.ACTION_DOWN) handwritingDownTime = now
-            val event = MotionEvent.obtain(handwritingDownTime, now, action, keyboard.width * x, keyboard.height * y, 0)
-            try { assertTrue("The handwriting gesture must be consumed", keyboard.dispatchTouchEvent(event)) }
+            var ancestor: View? = keyboard
+            while (ancestor != null && ancestor !is InputView) ancestor = ancestor.parent as? View
+            val input = requireNotNull(ancestor as? InputView) { "The keyboard must belong to the input view" }
+            val keyboardLocation = IntArray(2)
+            val inputLocation = IntArray(2)
+            keyboard.getLocationOnScreen(keyboardLocation)
+            input.getLocationOnScreen(inputLocation)
+            val event = MotionEvent.obtain(handwritingDownTime, now, action,
+                keyboard.width * x + keyboardLocation[0] - inputLocation[0],
+                keyboard.height * y + keyboardLocation[1] - inputLocation[1], 0)
+            try { assertTrue("The handwriting gesture must be consumed by the real input hierarchy", input.dispatchTouchEvent(event)) }
             finally { event.recycle() }
         }
     }
