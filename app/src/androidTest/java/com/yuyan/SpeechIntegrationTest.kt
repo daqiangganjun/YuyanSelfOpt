@@ -301,6 +301,14 @@ class SpeechIntegrationTest {
             Thread.sleep(AppPrefs.getInstance().keyboardSetting.longPressTimeout.getValue().toLong() + 1000)
             assertEquals(1, starts.get())
             assertTrue("AudioRecord must produce PCM while holding space", audioBytes.get() > 0)
+            if (InstrumentationRegistry.getArguments().getString("captureUi") == "true") {
+                instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                    context.openFileOutput("tmp_voice_panel.png", android.content.Context.MODE_PRIVATE).use {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    bitmap.recycle()
+                }
+            }
             touch(MotionEvent.ACTION_UP)
             Thread.sleep(800)
             instrumentation.runOnMainSync { assertEquals("语音输入测试", editor.text.toString()) }

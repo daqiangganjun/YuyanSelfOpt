@@ -319,6 +319,155 @@ class TerminalInputIntegrationTest {
     }
 
     @Test
+    fun numberSidebarAlignsWithItsKeySurfaceAfterResizing() = withKeyboard { input, _ ->
+        val manager = KeyboardManager.instance
+        val env = com.yuyan.imemodule.singleton.EnvironmentSingleton.instance
+        val originalHeight = env.keyBoardHeightRatio
+        val originalType = requireNotNull(manager.currentKeyboardType)
+        try {
+            for (height in listOf(0.3f, 0.22f)) {
+                instrumentation.runOnMainSync {
+                    env.keyBoardHeightRatio = height
+                    env.initData()
+                    com.yuyan.imemodule.utils.KeyboardLoaderUtil.instance.clearKeyboardMap()
+                    manager.clearKeyboard()
+                    manager.switchKeyboard(KeyboardManager.KeyboardType.NUMBER)
+                }
+                settleKeyboard()
+                instrumentation.runOnMainSync {
+                    val container = requireNotNull(manager.currentContainer)
+                    val keyboard = requireNotNull(findKeyboard(input))
+                    val softKeyboard = requireNotNull(keyboard.getSoftKeyboard())
+                    val key = requireNotNull(softKeyboard.getKeyByCode(InputModeSwitcher.USER_KEYCODE_LEFT_SYMBOL))
+                    val symbols = container.findViewById<View>(com.yuyan.imemodule.R.id.rv_prefix)
+                    assertEquals("The list must align with the visible key surface", key.mLeft + softKeyboard.keyXMargin, symbols.left)
+                    assertEquals(key.mRight - softKeyboard.keyXMargin, symbols.right)
+                    assertEquals(key.mTop + softKeyboard.keyYMargin, symbols.top)
+                    assertEquals(key.mBottom - softKeyboard.keyYMargin, symbols.bottom)
+                    assertEquals("Symbol area must share the key's horizontal center", (key.mLeft + key.mRight) / 2f, (symbols.left + symbols.right) / 2f, 0.5f)
+                }
+                saveUiSnapshot("tmp_number_symbols_centered.png")
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                env.keyBoardHeightRatio = originalHeight
+                env.initData()
+                com.yuyan.imemodule.utils.KeyboardLoaderUtil.instance.clearKeyboardMap()
+                manager.clearKeyboard()
+                manager.switchKeyboard(originalType)
+            }
+        }
+    }
+
+    @Test
+    fun keyboardResizeKeepsKeysAttachedAndAdjustmentControlsUsable() = withKeyboard { input, editor ->
+        val env = com.yuyan.imemodule.singleton.EnvironmentSingleton.instance
+        val manager = KeyboardManager.instance
+        val savedHeight = env.keyBoardHeightRatio
+        val savedFloating = env.keyboardModeFloat
+        val savedBorder = com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyBorder.getValue()
+        val initialType = requireNotNull(manager.currentKeyboardType)
+        try {
+            for (floating in listOf(false, true)) {
+                instrumentation.runOnMainSync {
+                    com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyBorder.setValue(true)
+                    env.keyboardModeFloat = floating
+                    env.keyBoardHeightRatio = 0.3f
+                    env.initData()
+                    com.yuyan.imemodule.utils.KeyboardLoaderUtil.instance.clearKeyboardMap()
+                    manager.clearKeyboard()
+                }
+                for (type in listOf(KeyboardManager.KeyboardType.QWERTYABC, KeyboardManager.KeyboardType.T9, KeyboardManager.KeyboardType.NUMBER)) {
+                    instrumentation.runOnMainSync { manager.switchKeyboard(type) }
+                    settleKeyboard()
+                    val container = requireNotNull(manager.currentContainer)
+                    var handle: View? = null
+                    instrumentation.runOnMainSync {
+                        container.setKeyboardHeight()
+                        container.setKeyboardHeight()
+                        assertEquals("Repeated adjustment entry must reuse its overlay", 1,
+                            descendants(container).count { it.id == com.yuyan.imemodule.R.id.iv_keyboard_height_Top })
+                        handle = container.findViewById(com.yuyan.imemodule.R.id.iv_keyboard_height_Top)
+                    }
+                    settleKeyboard()
+                    val keyboard = requireNotNull(findKeyboard(input))
+                    val beforeHeight = keyboard.height
+                    val rootLayoutParamsType = input.rootView.layoutParams.javaClass
+                    dragResizeHandle(requireNotNull(handle), -90f * context.resources.displayMetrics.density)
+                    settleKeyboard()
+                    instrumentation.runOnMainSync {
+                        assertSame("Resizing must retain the attached keyboard container", container, manager.currentContainer)
+                        assertTrue("Resizing must keep keys visible", keyboard.isShown && keyboard.isAttachedToWindow)
+                        assertTrue("Dragging upward must increase the key area", keyboard.height > beforeHeight)
+                        assertEquals(env.skbHeight, keyboard.height)
+                        assertTrue("Resize controls must remain above the keyboard", handle!!.isShown)
+                        assertEquals("Resizing must not replace the IME window layout parameters", rootLayoutParamsType, input.rootView.layoutParams.javaClass)
+                    }
+                    val expandedHeight = keyboard.height
+                    dragResizeHandle(requireNotNull(handle), 60f * context.resources.displayMetrics.density)
+                    settleKeyboard()
+                    instrumentation.runOnMainSync {
+                        assertSame(container, manager.currentContainer)
+                        assertEquals(env.skbHeight, keyboard.height)
+                        assertTrue("Dragging downward must reduce the key area", keyboard.height < expandedHeight)
+                        val bitmap = android.graphics.Bitmap.createBitmap(keyboard.width, keyboard.height, android.graphics.Bitmap.Config.ARGB_8888)
+                        try {
+                            keyboard.draw(android.graphics.Canvas(bitmap))
+                            val space = requireNotNull(keyboard.getSoftKeyboard()?.getKeyByCode(if (type == KeyboardManager.KeyboardType.NUMBER) KeyEvent.KEYCODE_0 else KeyEvent.KEYCODE_SPACE))
+                            assertTrue("Resized keys must retain usable hit bounds", space.width() > 0 && space.height() > 0)
+                            assertTrue("Resized keys must still render", bitmap.getPixel((space.mLeft + space.mRight) / 2, (space.mTop + space.mBottom) / 2) != 0)
+                        } finally { bitmap.recycle() }
+                        container.findViewById<View>(com.yuyan.imemodule.R.id.ll_keyboard_height_reset).performClick()
+                    }
+                    settleKeyboard()
+                    instrumentation.runOnMainSync {
+                        assertSame("Reset must not detach the current keyboard", container, manager.currentContainer)
+                        assertEquals(env.skbHeight, keyboard.height)
+                        container.findViewById<View>(com.yuyan.imemodule.R.id.ll_keyboard_height_sure).performClick()
+                        assertNull(container.findViewById<View>(com.yuyan.imemodule.R.id.iv_keyboard_height_Top))
+                    }
+                    if (!floating && type == KeyboardManager.KeyboardType.QWERTYABC) saveUiSnapshot("tmp_keyboard_resize.png")
+                }
+            }
+            instrumentation.runOnMainSync { manager.switchKeyboard(KeyboardManager.KeyboardType.QWERTYABC); editor.text.clear() }
+            settleKeyboard()
+            tapKeyboardKey(input, KeyEvent.KEYCODE_SPACE)
+            awaitCondition("Typing must still reach the editor after resizing") { editor.text.toString() == " " }
+        } finally {
+            instrumentation.runOnMainSync {
+                env.keyboardModeFloat = savedFloating
+                com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyBorder.setValue(savedBorder)
+                env.keyBoardHeightRatio = savedHeight
+                env.initData()
+                com.yuyan.imemodule.utils.KeyboardLoaderUtil.instance.clearKeyboardMap()
+                manager.clearKeyboard()
+                manager.switchKeyboard(initialType)
+            }
+        }
+    }
+
+    private fun dragResizeHandle(handle: View, deltaY: Float) {
+        val location = IntArray(2)
+        var downTime = 0L
+        instrumentation.runOnMainSync { handle.getLocationOnScreen(location); downTime = SystemClock.uptimeMillis() }
+        val screenX = location[0] + handle.width / 2f
+        val screenY = location[1] + handle.height / 2f
+        for ((action, offset) in listOf(MotionEvent.ACTION_DOWN to 0f,
+            MotionEvent.ACTION_MOVE to deltaY / 3, MotionEvent.ACTION_MOVE to deltaY * 2 / 3,
+            MotionEvent.ACTION_MOVE to deltaY, MotionEvent.ACTION_UP to deltaY)) {
+            instrumentation.runOnMainSync {
+                handle.getLocationOnScreen(location)
+                val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action,
+                    screenX, screenY + offset, 0)
+                event.offsetLocation(-location[0].toFloat(), -location[1].toFloat())
+                handle.dispatchTouchEvent(event)
+                event.recycle()
+            }
+            instrumentation.waitForIdleSync()
+        }
+    }
+
+    @Test
     fun composingPreviewReplacesAndCancelRestoresSelection() = runBlocking {
         val target = RecordingConnection()
         lateinit var session: TextTransformSession
@@ -505,6 +654,107 @@ class TerminalInputIntegrationTest {
     }
 
     @Test
+    fun flowerSourceSupportsCaretTapsInsertionAndBlinkWithoutStealingHostFocus() = withKeyboard { input, editor ->
+        instrumentation.runOnMainSync {
+            AppPrefs.getInstance().internal.lastFlowerTypefaceMode.setValue("FlowerVine")
+            input.toggleFlowerTypeface()
+            input.responseKeyEvent(SoftKey(label = "abcdef"))
+        }
+        settleKeyboard()
+        val source = flowerSource(input)
+        fun tapOffset(offset: Int) {
+            val point = FloatArray(2)
+            instrumentation.runOnMainSync {
+                val location = IntArray(2)
+                source.getLocationOnScreen(location)
+                val line = source.layout.getLineForOffset(offset)
+                point[0] = location[0] + source.totalPaddingLeft + source.layout.getPrimaryHorizontal(offset) - source.scrollX
+                point[1] = location[1] + source.totalPaddingTop + (source.layout.getLineTop(line) + source.layout.getLineBottom(line)) / 2f - source.scrollY
+            }
+            tapScreen(point[0], point[1])
+            awaitCondition("Tapping the source must move its local caret to $offset") { source.selectionStart == offset && source.selectionEnd == offset }
+        }
+        tapOffset(2)
+        instrumentation.runOnMainSync {
+            assertTrue("The host must retain window focus", editor.hasWindowFocus())
+            assertFalse("The IME source must not become a second system input target", source.hasWindowFocus())
+            input.responseKeyEvent(SoftKey(label = "X"))
+            assertEquals("abXcdef", source.text.toString())
+            input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_DEL))
+            assertEquals("abcdef", source.text.toString())
+            val buttons = descendants(input.auxiliaryPanel).filterIsInstance<TextView>().filter { it.tag == "flower_provider" || it.tag == "flower_action" }.toList()
+            assertEquals(2, buttons.size)
+            assertEquals("Style and confirmation must use the same font size", buttons[0].textSize, buttons[1].textSize, 0.01f)
+            assertTrue("The single-line panel should stay close to toolbar height", input.auxiliaryPanel.height <= input.mSkbCandidatesBarView.height + context.resources.displayMetrics.density * 6)
+            source.setText("abcd\nwxyz")
+            source.setSelection(source.length())
+        }
+        settleKeyboard()
+        tapOffset(6)
+        instrumentation.runOnMainSync {
+            input.responseKeyEvent(SoftKey(label = "X"))
+            assertEquals("abcd\nwXxyz", source.text.toString())
+            source.setText("abcdef")
+            source.setSelection(source.length())
+        }
+        settleKeyboard()
+        val colors = mutableSetOf<Int>()
+        repeat(8) {
+            instrumentation.runOnMainSync {
+                val bitmap = android.graphics.Bitmap.createBitmap(source.width, source.height, android.graphics.Bitmap.Config.ARGB_8888)
+                try {
+                    source.draw(android.graphics.Canvas(bitmap))
+                    val x = (source.totalPaddingLeft + source.layout.getPrimaryHorizontal(source.selectionStart) - source.scrollX + 1).toInt().coerceIn(0, bitmap.width - 1)
+                    val y = (source.totalPaddingTop + source.layout.getLineBottom(0) / 2 - source.scrollY).coerceIn(0, bitmap.height - 1)
+                    colors.add(bitmap.getPixel(x, y))
+                } finally { bitmap.recycle() }
+            }
+            Thread.sleep(150)
+        }
+        var caretDetails = ""
+        instrumentation.runOnMainSync {
+            caretDetails = "editing=${input.isTransformingText}; focused=${source.isFocused}; local=${(source as com.yuyan.imemodule.view.ImeSourceEditText).localEditing}; text=${source.text}; selection=${source.selectionStart}; shown=${source.isShown}; cursor=${source.isCursorVisible}; window=${source.hasWindowFocus()}; colors=$colors; size=${source.width}x${source.height}; scroll=${source.scrollX},${source.scrollY}"
+        }
+        assertTrue("The local caret must alternate visible and hidden phases; $caretDetails", colors.size > 1)
+        saveUiSnapshot("tmp_flower_editor_compact.png")
+        instrumentation.runOnMainSync { input.auxiliaryPanel.completeFlowerInput() }
+        awaitCondition("Confirmation must retain the local editor for the next segment") { input.isTransformingText && source.text.isEmpty() && source.isFocused }
+    }
+
+    @Test
+    fun symbolCategoryBarClipsCornersAndKeepsTheGridAboveIt() = withKeyboard { input, _ ->
+        instrumentation.runOnMainSync { KeyboardManager.instance.switchKeyboard(KeyboardManager.KeyboardType.SYMBOL) }
+        val container = KeyboardManager.instance.currentContainer as com.yuyan.imemodule.keyboard.container.SymbolContainer
+        for (mode in listOf(com.yuyan.imemodule.prefs.behavior.SymbolMode.Symbol,
+            com.yuyan.imemodule.prefs.behavior.SymbolMode.Emojicon, com.yuyan.imemodule.prefs.behavior.SymbolMode.Emoticon,
+            com.yuyan.imemodule.prefs.behavior.SymbolMode.Symbol)) {
+            instrumentation.runOnMainSync {
+                if (mode == com.yuyan.imemodule.prefs.behavior.SymbolMode.Symbol) container.setSymbolsView() else container.setEmojisView(mode)
+            }
+            settleKeyboard()
+            instrumentation.runOnMainSync {
+                val tabs = container.findViewById<com.google.android.material.tabs.TabLayout>(com.yuyan.imemodule.R.id.tab_symbols_emoji_type)
+                val pager = descendants(container).filterIsInstance<androidx.viewpager2.widget.ViewPager2>().first()
+                val bar = container.findViewById<View>(com.yuyan.imemodule.R.id.ll_symbols_emoji_type_item)
+                assertTrue("Category tabs must clip their round background", tabs.clipToOutline)
+                assertTrue("Symbol grid must not extend behind the category bar", pager.bottom <= bar.top)
+                assertTrue("Symbol grid must retain visible content", pager.height > 0)
+                val bitmap = android.graphics.Bitmap.createBitmap(tabs.width, tabs.height, android.graphics.Bitmap.Config.ARGB_8888)
+                try {
+                    tabs.background.setBounds(0, 0, tabs.width, tabs.height)
+                    tabs.background.draw(android.graphics.Canvas(bitmap))
+                    assertEquals("Category background corners must be transparent", 0, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
+                } finally { bitmap.recycle() }
+                if (tabs.tabCount > 1) {
+                    tabs.getTabAt(1)!!.select()
+                    assertEquals("Category selection must keep controlling the pager", 1, pager.currentItem)
+                }
+            }
+        }
+        saveUiSnapshot("tmp_symbol_categories_rounded.png")
+    }
+
+    @Test
     fun flowerModeConfirmsSegmentsWithoutClosingItsSourceEditor() = withKeyboard { input, editor ->
         instrumentation.runOnMainSync {
             editor.setText("prefix ")
@@ -529,7 +779,7 @@ class TerminalInputIntegrationTest {
         awaitCondition("Editing the source must replace its current preview") { editor.text.contains("世") && !editor.text.contains("你") }
         saveUiSnapshot("tmp_flower_preview.png")
         instrumentation.runOnMainSync { input.auxiliaryPanel.completeFlowerInput() }
-        awaitCondition("Done must commit and retain the source focus") {
+        awaitCondition("Done must commit and retain the source focus", { "editing=${input.isTransformingText}; focus=${flowerSource(input).isFocused}; source=${flowerSource(input).text}; host=${editor.text}; composing=${BaseInputConnection.getComposingSpanStart(editor.text)}" }) {
             input.isTransformingText && flowerSource(input).isFocused && flowerSource(input).text.isEmpty() &&
                 BaseInputConnection.getComposingSpanStart(editor.text) == -1
         }
@@ -574,7 +824,7 @@ class TerminalInputIntegrationTest {
         }
         awaitCondition("Raw host input must bypass flower conversion") { editor.text.toString().endsWith(" RAW") && editor.text.count { it == 'ζ' } == 1 }
         tapView(flowerSource(input))
-        awaitCondition("Tapping the source must resume flower input") { input.isTransformingText && flowerSource(input).isFocused }
+        awaitCondition("Tapping the source must resume flower input", { "editing=${input.isTransformingText}; focus=${flowerSource(input).isFocused}; source=${flowerSource(input).text}; visible=${flowerSource(input).isShown}; size=${flowerSource(input).width}x${flowerSource(input).height}" }) { input.isTransformingText && flowerSource(input).isFocused }
         instrumentation.runOnMainSync { input.responseKeyEvent(SoftKey(label = "next")) }
         awaitCondition("Resuming the source must create a new preview") { editor.text.count { it == 'ζ' } == 2 }
         instrumentation.runOnMainSync { input.auxiliaryPanel.completeFlowerInput() }

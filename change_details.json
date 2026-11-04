@@ -1,7 +1,55 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-02",
+  "updatedAt": "2026-11-03",
   "entries": [
+    {
+      "id": "20261103-02",
+      "date": "2026-11-03",
+      "type": "fix",
+      "title": "数字符号居中与按键背景蒙版强度，版本5.2.5",
+      "trigger": "用户反馈数字小键盘符号区不居中，并要求在自定义主题明暗调节中增加按键背景蒙版强度。",
+      "rootCause": "符号列表沿用整个占位键宽度但又增加左右边距，未与实际键面边界对齐；字体行高度量不等于符号字形边界，且12dp上下内边距会在矮键盘中挤压字形。主题编辑器只有图片明暗调节，没有独立的键帽底色透明度入口。",
+      "solution": "T9TextContainer按占位键的实际键面设置列表宽高与偏移，PrefixAdapter启用实际字形边界居中，固定行内边距降到4dp。Theme.Custom通过已有普通键、功能键、强调键ARGB透明度字段保存蒙版强度，不引入新序列化字段；编辑页新增0–100%滑块，切换深浅按键保留透明度，取消不写入保存值。预览仅更新已有TextKeyboard的主题颜色，不重建视图和图片。根build.gradle补丁号递增。",
+      "changedFiles": [
+        { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/T9TextContainer.kt", "notes": "符号列表宽度扣除两侧键距，并显式对齐占位键的上下左右边界。" },
+        { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/popup/AutoScaleTextView.kt、adapter/PrefixAdapter.kt、res/layout/sdk_item_list_alpha_symbol_noraml.xml", "notes": "符号栏按实际字形边界等比缩放及居中，仅在变更时计算，既有弹出按键排版不受影响。" },
+        { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/Theme.kt、ui/fragment/theme/CustomThemeActivity.kt、keyboard/KeyboardPreviewView.kt", "notes": "独立键帽透明度、旧主题兼容、保存恢复与预览复用。" },
+        { "path": "build.gradle、yuyansdk/src/main/res/values/strings_ui.xml、README.md", "notes": "补丁版本5.2.5、控件说明和既有使用说明同步。" },
+        { "path": "app/src/androidTest/java/com/yuyan/RuntimeCompatibilityTest.kt、TerminalInputIntegrationTest.kt", "notes": "符号像素边界居中、拉伸后的列表对齐、旧主题读写、编辑器真实滑动、取消、切换和预览复用回归。" }
+      ],
+      "verification": "Debug、测试APK和R8压缩Release构建通过；19项针对性输入与主题回归全部通过，包括4项新增测试：不同尺寸符号像素居中、拉伸后符号区边界对齐、旧主题及蒙版保存恢复、编辑器真实拖动与取消、切换深浅按键和预览对象复用。保留排除3项依赖完整中文方案切换或真实Termux环境的既有用例。APK元数据为5.2.5/50205，v1/v2签名及16KB ZIP对齐通过；SDK lint仍为1项既有EmojiCompat.reset错误、110项警告和2项提示，未新增错误。产物为app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.5_release.apk，未安装真机或发布到GitHub；模拟器输入法设置已恢复。",
+      "commits": { "main": null, "yuyansdk": null },
+      "lessons": [
+        "符号视觉居中需要同时验证容器几何和字形像素边界；仅设置gravity=center不能纠正自定义Canvas绘制的度量偏差。",
+        "新增外观参数优先复用已有颜色字段，避免改变旧主题格式；滑块初始化时不能把历史各类按键不同的透明度强制归一。",
+        "设置预览拖动时复用视图和背景Drawable，避免每个进度变化都重建键盘或解码图片。"
+      ]
+    },
+    {
+      "id": "20261103-01",
+      "date": "2026-11-03",
+      "type": "fix",
+      "title": "花漾字紧凑编辑、符号栏圆角与界面修复，版本5.2.4",
+      "trigger": "用户反馈符号和表情分类栏方角、花漾字按钮字号不一致及留白过大、原文光标不闪烁且无法点击定位，要求高度接近工具栏并升级一个补丁版本。此前同轮已要求恢复键盘配色、缩小设置项间距和修复拉伸后只剩工具栏。",
+      "rootCause": "分类栏沿用Material默认背景且列表以match_parent高度叠在分类栏下方；花漾字按钮分别为12sp和14sp且固定48dp高度；IME窗口不持有普通窗口焦点，原有代码仅补画静态光标，不能依赖系统自动焦点策略完成本地原文编辑。高度拉伸原逻辑清空并移除当前容器后仍刷新旧视图。",
+      "solution": "新增ImeSourceEditText，明确触摸焦点，保留本地InputConnection和宿主窗口焦点，使用系统文本布局计算点击偏移，仅在可见且正在编辑时每500ms更新光标；花漾字按工具栏高度测量，按钮统一14sp，原文最多显示三行并区分编辑态边框。分类栏圆角裁剪、移除默认指示线，ViewPager按剩余高度布局，替换数据前解除旧TabLayoutMediator。保留此前Canvas局部重绘及原位尺寸更新；正式依赖不变，仅测试模块显式引用已使用的Material组件。补丁版本由根build.gradle统一递增。",
+      "changedFiles": [
+        { "path": "build.gradle、app/build.gradle", "notes": "补丁号递增，versionCode派生为50204；androidTest显式引用既有Material版本。" },
+        { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/ImeSourceEditText.kt、KeyboardAuxiliaryPanel.kt", "notes": "原文触摸定位、焦点与低频光标生命周期；紧凑排版、统一字号、状态边框。" },
+        { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SymbolContainer.kt", "notes": "分类栏圆角及选中反馈、列表避让、Mediator替换和取消长按回调。" },
+        { "path": "键盘绘制与调节、设置组件、主题资源、VoiceInputPanel.kt", "notes": "纳入同轮已验证的界面更新、原配色恢复、设置间距收紧与拉伸修复，继续使用View和Canvas。" },
+        { "path": "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt、RuntimeCompatibilityTest.kt、SpeechIntegrationTest.kt", "notes": "覆盖花漾字编辑、光标像素变化、分类栏裁剪、键盘拉伸及既有输入路径；语音支持可选截图。" },
+        { "path": "README.md、change_log.md、change_details.json", "notes": "最小同步界面行为和开发验证记录。" }
+      ],
+      "verification": "Debug、测试APK与R8压缩Release构建通过。模拟器15项针对性输入集成测试通过，包括原文点击定位、中间插入删除、多行编辑、光标像素明暗变化、宿主焦点保留、分段提交、宿主切换、符号分类切换及圆角、普通与悬浮键盘拉伸。未运行依赖真实Termux或完整中文方案切换的3项环境相关用例。APK元数据为5.2.4/50204，v1/v2签名和16KB ZIP对齐校验通过。SDK lint剩余1项既有EmojiCompat.reset私有接口错误、110项警告及2项提示；没有宣称lint零错误。产物为app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.4_release.apk，未安装真机或发布到GitHub。模拟器默认输入法和启用列表已恢复。",
+      "commits": { "main": null, "yuyansdk": null },
+      "lessons": [
+        "IME内部编辑框不应抢占宿主窗口或注册第二个系统输入目标；需要显式保留触摸焦点，并为无窗口焦点状态提供局部光标行为。",
+        "光标的定时刷新须在关闭编辑、隐藏或分离时停止，避免输入法常驻后持续刷新。",
+        "ConstraintLayout中的可滚动内容应以0dp配合上下约束避让底栏，不能用match_parent再追加底部约束。",
+        "调节键盘尺寸不能先clearKeyboard移除拖动中的容器，更不能把普通布局参数赋给View.rootView所指向的窗口根视图。"
+      ]
+    },
     {
       "id": "20261102-05",
       "date": "2026-11-02",
@@ -2003,6 +2051,36 @@
       }
     },
     "codeMap": [
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/Theme.kt",
+        "role": "内置和自定义主题的颜色与图片配置",
+        "notes": "自定义键帽蒙版复用keyBackgroundColor、functionKeyBackgroundColor、accentKeyBackgroundColor的alpha，keyBackgroundOpacity为不序列化的计算属性。旧主题各字段原值保持不变，只有用户调节才统一alpha。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/theme/CustomThemeActivity.kt",
+        "role": "自定义主题编辑、图片明暗及按键背景蒙版调节",
+        "notes": "蒙版与图片明暗独立；深浅按键切换保留各类键帽alpha。初始化滑块不触发写入，用户拖动仅更新颜色与预览，保存由既有Activity结果通道交给ThemeManager。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardPreviewView.kt",
+        "role": "主题编辑和选择页的键盘预览",
+        "notes": "updateKeyAppearance复用当前TextKeyboard，只更新主题颜色；蒙版滑动不能使用会重建子视图的setTheme入口。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/popup/AutoScaleTextView.kt",
+        "role": "符号和弹出按键的自适应Canvas文本绘制",
+        "notes": "centerGlyphBounds仅由侧边符号适配器启用，按Paint实际字形边界中心定位并限制宽高缩放；默认路径继续使用原有字体行高度量。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/ImeSourceEditText.kt",
+        "role": "IME内部原文编辑控件",
+        "notes": "继承AppCompatEditText，onCheckIsTextEditor为false以保留宿主InputConnection；需显式设置触摸焦点。无窗口焦点时使用getOffsetForPosition定位点击，局部光标每500ms闪烁，仅在可见、附着、聚焦且本地编辑时运行，隐藏和分离时停止。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SymbolContainer.kt",
+        "role": "符号和表情网格及分类切换栏",
+        "notes": "TabLayout以键盘主题圆角背景和clipToOutline裁剪；网格高度0dp约束在分类栏上方。重新绑定分类前detach旧Mediator，避免重复观察旧adapter；取消与移除视图时停止长按删除回调。"
+      },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/callback/CandidateViewListener.kt",
         "role": "候选栏操作与内部弹出菜单状态回调",
