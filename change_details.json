@@ -3,6 +3,41 @@
   "updatedAt": "2026-11-04",
   "entries": [
     {
+      "id": "20261104-02",
+      "date": "2026-11-04",
+      "type": "chore",
+      "title": "正式发布语燕SelfOpt 5.2.6",
+      "trigger": "用户要求推送已提交修改并生成正式Release。",
+      "rootCause": "主仓库与SDK的5.2.4至5.2.6改动已本地提交，正式安装包已验证，远端最新正式版仍为5.2.3。",
+      "solution": "依次推送SDK和主仓库，将selfopt-v5.2.6固定到正式APK源码提交，准备累计用户更新说明，上传Release草稿并下载附件核验后发布为最新正式版。",
+      "changedFiles": [
+        {
+          "path": "两个Git仓库、selfopt-v5.2.6标签与GitHub Release",
+          "notes": "推送既有界面、主题及手写修复，发布ARM64安装包与累计说明。"
+        },
+        {
+          "path": "change_log.md、change_details.json",
+          "notes": "记录正式发布、源码提交及远端附件校验结果。"
+        }
+      ],
+      "verification": "本地签名与16KB ZIP对齐复核通过；GitHub附件状态uploaded，大小66970099字节，digest及实际下载文件SHA256均为a5812a33066e671e01e4d145d387b97ecde163a5099d6503d913e2fd41da01d8，与本地一致。发布后isDraft=false、isPrerelease=false，latest接口返回selfopt-v5.2.6。标签固定到e62be73ea90fcf69b3876a76744e55c6d3b30b13，SDK指针为1470aa24e2761d59200a8b67c4a5d27f802b69d9。发行记录提交仅更新文档，不改变安装包对应源码。",
+      "commits": {
+        "main": "e62be73ea90fcf69b3876a76744e55c6d3b30b13",
+        "yuyansdk": "1470aa24e2761d59200a8b67c4a5d27f802b69d9",
+        "releaseRecords": "本条所在提交"
+      },
+      "release": {
+        "tag": "selfopt-v5.2.6",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.6",
+        "artifact": "yuyanSelfOpt_5.2.6_release.apk",
+        "size": 66970099,
+        "sha256": "a5812a33066e671e01e4d145d387b97ecde163a5099d6503d913e2fd41da01d8"
+      },
+      "lessons": [
+        "本次SSH 22端口读取耗时较长；Windows OpenSSH通过ssh.github.com:443推送成功。备用通道使用GitHub HTTPS meta API返回的公开主机密钥核验，仅设置当前命令参数，不修改仓库SSH配置。"
+      ]
+    },
+    {
       "id": "20261104-01",
       "date": "2026-11-04",
       "type": "fix",
@@ -34,7 +69,7 @@
       ],
       "verification": "39项针对性测试通过：10项手写异步时序、8项运行兼容、21项实际输入回归（含4项新增手写交互）；手写服务重启后的冷启动立即请求另行通过。测试使用Android 15、16KB页面且支持ARM64转换的独立模拟器。覆盖停笔预览、候选替换不重复、跨底部按键抬手、普通按键保持可用、持笔期间不误清空、取消和退格撤销、不可提交反馈、关闭联想时保留候选，以及花漾字和终端修饰键等既有路径。2项依赖完整中文方案切换或实际Termux环境的既有测试未执行。初次界面测试遇到系统UI无响应弹窗及旧测试恢复设置时的字面引号，恢复环境并修复测试后整组21项重跑通过。Debug、测试APK和R8压缩Release构建通过，版本5.2.6/50206，Release v1/v2签名及16KB ZIP对齐通过。最终安装包从提交后的源码重新构建，输出位于app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.6_release.apk；未发布到GitHub。",
       "commits": {
-        "main": "本条所在提交",
+        "main": "e62be73",
         "yuyansdk": "1470aa2"
       },
       "lessons": [
@@ -2083,14 +2118,14 @@
         "configureCommand": "cmake -S tmp_rime_jni -B tmp_rime_jni/build -G Ninja -DCMAKE_MAKE_PROGRAM=<sdk>/cmake/3.31.6/bin/ninja.exe -DCMAKE_TOOLCHAIN_FILE=<sdk>/ndk/28.2.13676358/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release"
       },
       "latestVerifiedRelease": {
-        "tag": "selfopt-v5.2.3",
-        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.3",
-        "mainCommit": "4acc33c24e0e3a406f987be274d5a5d96047842c",
-        "sdkCommit": "3c803c0fc9a80b39cad93840d688623210503e80",
-        "artifact": "yuyanSelfOpt_5.2.3_release.apk",
-        "sha256": "3bfbad6632b23c64c732501c34dfd76a6f7ce728ca34603875ac808c63202836",
-        "verification": "2026-11-02从已提交源码构建的正式APK已通过签名、版本、源码标识、ZIP完整性和16 KB ZIP对齐；GitHub远端附件元数据及实际下载文件的大小和SHA256一致，发布后确认稳定正式版且为latest。"
-      }
+      "tag": "selfopt-v5.2.6",
+      "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.6",
+      "mainCommit": "e62be73ea90fcf69b3876a76744e55c6d3b30b13",
+      "sdkCommit": "1470aa24e2761d59200a8b67c4a5d27f802b69d9",
+      "artifact": "yuyanSelfOpt_5.2.6_release.apk",
+      "sha256": "a5812a33066e671e01e4d145d387b97ecde163a5099d6503d913e2fd41da01d8",
+      "verification": "2026-11-04从已提交源码构建的正式APK通过签名、版本、源码标识、ZIP完整性及16KB对齐检查；GitHub附件大小、digest与实际下载SHA256均一致，发布后确认正式版且为latest。"
+    }
     },
     "codeMap": [
       {
