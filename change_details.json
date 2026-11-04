@@ -3,6 +3,43 @@
   "updatedAt": "2026-11-04",
   "entries": [
     {
+      "id": "20261104-04",
+      "date": "2026-11-04",
+      "type": "chore",
+      "title": "将现有Release更新为语燕SelfOpt 5.2.7",
+      "trigger": "用户要求打包更新后，优先补充内容并覆盖本次Release，无法覆盖时再另建发行。",
+      "rootCause": "5.2.7补齐了5.2.6中连续多笔书写对按钮区域的保护，需同步正式安装包和用户更新说明。",
+      "solution": "推送SDK与主仓库，从提交源码构建5.2.7并创建selfopt-v5.2.7标签；先向现有Release上传并下载核验新包，再更新同一发行记录的标签、版本标题和累计说明，删除旧APK附件，设为最新版。旧selfopt-v5.2.6源码标签保留。",
+      "changedFiles": [
+        {
+          "path": "两个Git仓库、selfopt-v5.2.7与GitHub Release",
+          "notes": "现有Release ID 433495650从5.2.6更新为5.2.7，未新增发行记录。"
+        },
+        {
+          "path": "change_log.md、change_details.json",
+          "notes": "记录构建、附件替换和远端校验结果；恢复20261029-01条目的原始空SDK提交记录。"
+        }
+      ],
+      "verification": "Debug、测试APK和R8压缩Release构建通过；正式APK版本5.2.7/50207，包内源码标识为9d27659a58da9913c3b5773af3517fa8a92ef69d，SDK为5455049c6c70116be3a2ec8503543654fc234606。v1/v2签名、ZIP完整性、16KB ZIP及两份原生库ELF对齐通过。GitHub新附件大小66970098字节，digest及实际下载SHA256均为9bd4365e8fa9c7b1d1c6e0a533012b8e6af2500fa96a9ccc89c20591216b1a71，与本地一致。更新后Release ID仍为433495650，isDraft=false、isPrerelease=false，latest为selfopt-v5.2.7且仅保留5.2.7安装包。42项回归与最后23项界面复测通过，详见20261104-03。",
+      "commits": {
+        "main": "9d27659a58da9913c3b5773af3517fa8a92ef69d",
+        "yuyansdk": "5455049c6c70116be3a2ec8503543654fc234606",
+        "releaseRecords": "本条所在提交"
+      },
+      "release": {
+        "id": 433495650,
+        "tag": "selfopt-v5.2.7",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.7",
+        "artifact": "yuyanSelfOpt_5.2.7_release.apk",
+        "size": 66970098,
+        "sha256": "9bd4365e8fa9c7b1d1c6e0a533012b8e6af2500fa96a9ccc89c20591216b1a71"
+      },
+      "lessons": [
+        "复用发行记录可更新其tag_name、标题与附件，同时保留旧源码标签；新标签必须指向安装包实际构建提交。",
+        "先下载验证新附件，再更换发行版本并删除旧附件，避免只凭上传成功判断发布完成。"
+      ]
+    },
+    {
       "id": "20261104-03",
       "date": "2026-11-04",
       "type": "fix",
@@ -26,7 +63,7 @@
       ],
       "verification": "42项回归通过（11项手写会话、8项运行兼容、23项界面输入），均在Android 15、16KB页面且支持ARM64转换的独立模拟器执行。新增覆盖整字期间底部各键、独立侧边符号和候选工具栏不可点击，停笔与取消后按钮恢复；已选字等待前字结果时不锁定按钮。既有预览、改选、删除及跨键书写改经InputView完整分发。首轮一项预览超时未能稳定复现，补充状态诊断后两项定向复测与42项整组重跑通过；再补充布局稳定等待，最终23项界面回归全部通过。2项依赖完整中文方案切换或实际Termux环境的既有测试未执行。Debug及测试APK构建通过，正式包从提交后的源码构建，最终包校验与发行结果另记。",
       "commits": {
-        "main": "本条所在提交",
+        "main": "9d27659",
         "yuyansdk": "5455049"
       },
       "lessons": [
@@ -721,7 +758,7 @@
       ],
       "commits": {
         "main": "70dce573dc8f31a2248eaea9436eef9fe824a13c",
-        "yuyansdk": "5455049"
+        "yuyansdk": null
       }
     },
     {
@@ -2151,13 +2188,13 @@
         "configureCommand": "cmake -S tmp_rime_jni -B tmp_rime_jni/build -G Ninja -DCMAKE_MAKE_PROGRAM=<sdk>/cmake/3.31.6/bin/ninja.exe -DCMAKE_TOOLCHAIN_FILE=<sdk>/ndk/28.2.13676358/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release"
       },
       "latestVerifiedRelease": {
-      "tag": "selfopt-v5.2.6",
-      "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.6",
-      "mainCommit": "e62be73ea90fcf69b3876a76744e55c6d3b30b13",
-      "sdkCommit": "1470aa24e2761d59200a8b67c4a5d27f802b69d9",
-      "artifact": "yuyanSelfOpt_5.2.6_release.apk",
-      "sha256": "a5812a33066e671e01e4d145d387b97ecde163a5099d6503d913e2fd41da01d8",
-      "verification": "2026-11-04从已提交源码构建的正式APK通过签名、版本、源码标识、ZIP完整性及16KB对齐检查；GitHub附件大小、digest与实际下载SHA256均一致，发布后确认正式版且为latest。"
+      "tag": "selfopt-v5.2.7",
+      "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.7",
+      "mainCommit": "9d27659a58da9913c3b5773af3517fa8a92ef69d",
+      "sdkCommit": "5455049c6c70116be3a2ec8503543654fc234606",
+      "artifact": "yuyanSelfOpt_5.2.7_release.apk",
+      "sha256": "9bd4365e8fa9c7b1d1c6e0a533012b8e6af2500fa96a9ccc89c20591216b1a71",
+      "verification": "2026-11-04从提交源码构建并验证签名、版本、源码标识、ZIP完整性和16KB对齐。现有发行记录更新为5.2.7，旧APK附件已替换；新附件元数据与实际下载SHA256均一致，确认正式版且为latest。"
     }
     },
     "codeMap": [
