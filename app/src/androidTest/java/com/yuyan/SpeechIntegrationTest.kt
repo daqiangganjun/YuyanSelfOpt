@@ -227,9 +227,50 @@ class SpeechIntegrationTest {
     }
 
     @Test
+    fun voicePanelCancelsAnUpwardSwipeWhileKeepingHorizontalTouches() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            var cancelled = 0
+            val armedStates = mutableListOf<Boolean>()
+            val panel = com.yuyan.imemodule.speech.VoiceInputPanel(context, onCancelArmed = { armedStates += it }) { cancelled++ }
+            val width = (360 * context.resources.displayMetrics.density).toInt()
+            val height = (240 * context.resources.displayMetrics.density).toInt()
+            panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+            panel.layout(0, 0, width, height)
+            val now = SystemClock.uptimeMillis()
+            fun touch(action: Int, x: Float, y: Float) {
+                val event = MotionEvent.obtain(now, SystemClock.uptimeMillis(), action, x, y, 0)
+                panel.dispatchTouchEvent(event)
+                event.recycle()
+            }
+            val x = width / 2f
+            val y = height / 2f
+            touch(MotionEvent.ACTION_DOWN, x, y)
+            touch(MotionEvent.ACTION_MOVE, x + 100, y)
+            touch(MotionEvent.ACTION_UP, x + 100, y)
+            assertEquals(0, cancelled)
+            val density = context.resources.displayMetrics.density
+            touch(MotionEvent.ACTION_DOWN, x, y)
+            touch(MotionEvent.ACTION_MOVE, x, y - 70 * density)
+            assertEquals("An upward swipe only arms cancellation", 0, cancelled)
+            touch(MotionEvent.ACTION_MOVE, x, y - 10 * density)
+            touch(MotionEvent.ACTION_UP, x, y - 10 * density)
+            assertEquals("Swiping back down resumes instead of cancelling", 0, cancelled)
+            assertEquals(listOf(true, false), armedStates)
+            touch(MotionEvent.ACTION_DOWN, x, y)
+            touch(MotionEvent.ACTION_MOVE, x, y - 70 * density)
+            touch(MotionEvent.ACTION_UP, x, y - 70 * density)
+            assertEquals("Releasing while armed cancels", 1, cancelled)
+        }
+    }
+
+    @Test
     fun longPressRecordsAndCommitsOnlyTheCurrentSession() {
         assumeTrue("Pass speechUiTest=true to exercise the debug IME", InstrumentationRegistry.getArguments().getString("speechUiTest") == "true")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val env = com.yuyan.imemodule.singleton.EnvironmentSingleton.instance
+        val previousFloating = env.keyboardModeFloat
+        instrumentation.runOnMainSync { env.keyboardModeFloat = true; env.initData(); KeyboardManager.instance.clearKeyboard() }
         fun shell(command: String): String = android.os.ParcelFileDescriptor.AutoCloseInputStream(
             instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use { it.readText().trim() }
         val previousIme = shell("settings get secure default_input_method")
@@ -284,23 +325,56 @@ class SpeechIntegrationTest {
             val x = (space.mLeft + space.mRight) / 2f
             val y = (space.mTop + space.mBottom) / 2f
             var downTime = 0L
-            fun touch(action: Int) {
+            fun touch(action: Int, deltaY: Float = 0f) {
                 instrumentation.runOnMainSync {
                     if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
-                    val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+                    val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y + deltaY, 0)
                     keyView.onTouchEvent(event)
                     event.recycle()
                 }
+            }
+            fun awaitState(message: String, condition: () -> Boolean) {
+                val deadline = SystemClock.uptimeMillis() + 15_000
+                while (!condition() && SystemClock.uptimeMillis() < deadline) Thread.sleep(50)
+                assertTrue(message, condition())
+            }
+            fun editorText(): String {
+                var text = ""
+                instrumentation.runOnMainSync { text = editor.text.toString() }
+                return text
             }
             touch(MotionEvent.ACTION_DOWN)
             touch(MotionEvent.ACTION_UP)
             instrumentation.waitForIdleSync()
             assertEquals(0, starts.get())
             instrumentation.runOnMainSync { assertEquals(" ", editor.text.toString()); editor.text.clear() }
+            var input: com.yuyan.imemodule.keyboard.InputView? = null
+            instrumentation.runOnMainSync {
+                var ancestor: View? = keyView
+                while (ancestor != null && ancestor !is com.yuyan.imemodule.keyboard.InputView) ancestor = ancestor.parent as? View
+                input = ancestor as? com.yuyan.imemodule.keyboard.InputView
+            }
+            val root = requireNotNull(input).mSkbRoot
+            val originalWidth = root.width
+            val originalPosition = IntArray(2).also { root.getLocationOnScreen(it) }
             touch(MotionEvent.ACTION_DOWN)
-            Thread.sleep(AppPrefs.getInstance().keyboardSetting.longPressTimeout.getValue().toLong() + 1000)
+            awaitState("Long press must start the speech session") { starts.get() == 1 }
+            awaitState("AudioRecord must produce PCM while holding space") { audioBytes.get() > 0 }
+            instrumentation.waitForIdleSync()
             assertEquals(1, starts.get())
             assertTrue("AudioRecord must produce PCM while holding space", audioBytes.get() > 0)
+            instrumentation.runOnMainSync {
+                assertEquals("The voice panel must not widen a floating keyboard", originalWidth, root.width)
+                val position = IntArray(2).also { root.getLocationOnScreen(it) }
+                assertArrayEquals("The floating keyboard must keep its position", originalPosition, position)
+                assertTrue("The test must exercise a narrow floating keyboard", originalWidth < env.mScreenWidth)
+                val parent = requireNotNull(input)
+                val panel = (0 until parent.childCount).map { parent.getChildAt(it) }.filterIsInstance<com.yuyan.imemodule.speech.VoiceInputPanel>().single()
+                assertTrue("The overlay must remain within the keyboard width", panel.width <= originalWidth)
+                val panelBottom = IntArray(2).also { panel.getLocationInWindow(it) }[1] + panel.height
+                val spaceTop = IntArray(2).also { keyView.getLocationInWindow(it) }[1] + space.mTop
+                assertTrue("The overlay must leave the space row visible: bottom=$panelBottom, space=$spaceTop", panelBottom <= spaceTop)
+            }
             if (InstrumentationRegistry.getArguments().getString("captureUi") == "true") {
                 instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
                     context.openFileOutput("tmp_voice_panel.png", android.content.Context.MODE_PRIVATE).use {
@@ -309,17 +383,29 @@ class SpeechIntegrationTest {
                     bitmap.recycle()
                 }
             }
-            touch(MotionEvent.ACTION_UP)
-            Thread.sleep(800)
+            touch(MotionEvent.ACTION_MOVE, -context.resources.displayMetrics.density * 70)
+            touch(MotionEvent.ACTION_MOVE, -context.resources.displayMetrics.density * 10)
+            touch(MotionEvent.ACTION_UP, -context.resources.displayMetrics.density * 10)
+            awaitState("Swiping back down before release must still submit") { editorText() == "语音输入测试" }
             instrumentation.runOnMainSync { assertEquals("语音输入测试", editor.text.toString()) }
             touch(MotionEvent.ACTION_DOWN)
-            Thread.sleep(AppPrefs.getInstance().keyboardSetting.longPressTimeout.getValue().toLong() + 500)
-            touch(MotionEvent.ACTION_CANCEL)
+            awaitState("A new long press must start a fresh session") { starts.get() == 2 }
+            provider.callback?.onResult(SpeechResult("尚未松手的最终结果", true))
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync { assertEquals("An early final result must wait for release", "语音输入测试", editor.text.toString()) }
+            touch(MotionEvent.ACTION_MOVE, -context.resources.displayMetrics.density * 70)
+            touch(MotionEvent.ACTION_UP, -context.resources.displayMetrics.density * 70)
             provider.callback?.onResult(SpeechResult("过期结果", true))
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync { assertEquals("语音输入测试", editor.text.toString()) }
+            instrumentation.runOnMainSync {
+                assertEquals(originalWidth, root.width)
+                val parent = requireNotNull(input)
+                assertFalse((0 until parent.childCount).any { parent.getChildAt(it) is com.yuyan.imemodule.speech.VoiceInputPanel })
+            }
         } finally {
             instrumentation.runOnMainSync { activity?.finish() }
+            instrumentation.runOnMainSync { env.keyboardModeFloat = previousFloating; env.initData(); KeyboardManager.instance.clearKeyboard() }
             settings.providerId = previousProvider
             settings.enabled = previousEnabled
             credentials.write(provider.id, "")

@@ -252,13 +252,13 @@ class RuntimeCompatibilityTest {
                 val preview = views.filterIsInstance<com.yuyan.imemodule.keyboard.KeyboardPreviewView>().first()
                 val keyboard = descendants(preview).filterIsInstance<TextKeyboard>().first()
                 val background = preview.background
-                val filter = (background as android.graphics.drawable.BitmapDrawable).colorFilter
+                val filter = background.colorFilter
                 assertEquals("Opening the editor must preserve an existing theme", original, themeField.get(activity))
                 drag(slider, 0f)
                 assertEquals(0, (themeField.get(activity) as com.yuyan.imemodule.data.theme.Theme.Custom).keyBackgroundOpacity)
                 assertSame("Dragging mask strength must reuse the keyboard view", keyboard, descendants(preview).filterIsInstance<TextKeyboard>().first())
                 assertSame("Mask adjustment must not recreate the photo", background, preview.background)
-                assertSame("Mask adjustment must not change photo brightness", filter, (preview.background as android.graphics.drawable.BitmapDrawable).colorFilter)
+                assertSame("Mask adjustment must not change photo brightness", filter, preview.background.colorFilter)
                 drag(slider, 75f)
                 edited = themeField.get(activity) as com.yuyan.imemodule.data.theme.Theme.Custom
                 assertEquals(75, edited.keyBackgroundOpacity)
@@ -310,6 +310,33 @@ class RuntimeCompatibilityTest {
                 prefs.keyboardHeightRatio.setValue(savedHeight)
                 prefs.keyboardHeightRatioLandscape.setValue(savedLandscapeHeight)
                 env.isLandscape = savedLandscape
+                env.initData()
+            }
+        }
+    }
+
+    @Test
+    fun floatingKeyboardHeightIsCappedToTheWindowArea() {
+        instrumentation.runOnMainSync {
+            val env = com.yuyan.imemodule.singleton.EnvironmentSingleton.instance
+            val savedFloat = env.keyboardModeFloat
+            val savedMax = env.floatMaxAreaHeight
+            fun totalHeight() = env.skbHeight + env.heightForCandidatesArea + env.heightForKeyboardMove
+            try {
+                env.keyboardModeFloat = true
+                env.floatMaxAreaHeight = 0
+                env.initData()
+                val natural = totalHeight()
+                val limit = natural - env.skbHeight / 4
+                env.floatMaxAreaHeight = limit
+                env.initData()
+                assertTrue("Floating keyboard must fit the window area", totalHeight() <= limit)
+                env.floatMaxAreaHeight = natural * 2
+                env.initData()
+                assertEquals("A roomy window must not shrink the keyboard", natural, totalHeight())
+            } finally {
+                env.keyboardModeFloat = savedFloat
+                env.floatMaxAreaHeight = savedMax
                 env.initData()
             }
         }

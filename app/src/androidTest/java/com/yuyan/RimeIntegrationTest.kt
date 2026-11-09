@@ -44,6 +44,20 @@ class RimeIntegrationTest {
     }
 
     private fun setPreference(key: String, value: Any) {
+        if (key == "rime_dictionary_family" && value == "ice" && !com.yuyan.inputmethod.DictionaryStore.hasIce(context)) {
+            val root = java.io.File(context.filesDir, "transfer-tests")
+            val indexFile = java.io.File(root, "index.json")
+            if (InstrumentationRegistry.getArguments().getString("requireTransferFixtures") != "true") org.junit.Assume.assumeTrue("Optional dictionary fixture is not provisioned", indexFile.isFile)
+            assertTrue("Optional dictionary fixture is missing", indexFile.isFile)
+            val index = com.yuyan.imemodule.data.transfer.SyncProtocol.json.decodeFromString<com.yuyan.inputmethod.DictionaryIndex>(indexFile.readText())
+            val ice = index.packages.single { it.family == "ice" }
+            val archive = java.io.File(root, "ice.zip")
+            com.yuyan.inputmethod.DictionaryStore.validateArchive(archive, ice)
+            val destination = com.yuyan.inputmethod.DictionaryStore.packageFile(context, ice).apply { parentFile!!.mkdirs() }
+            archive.copyTo(destination, overwrite = true)
+            EngineRuntime.activatePackages(context, com.yuyan.inputmethod.DictionaryStore.active(context) + ("ice" to ice))
+            awaitReady()
+        }
         instrumentation.runOnMainSync {
             val edit = PreferenceManager.getDefaultSharedPreferences(context).edit()
             when (value) {
@@ -172,6 +186,31 @@ class RimeIntegrationTest {
             RimeEngine.onNormalKey(KeyEvent(0, 0, KeyEvent.ACTION_UP,
                 KeyEvent.KEYCODE_A + char.lowercaseChar().code - 'a'.code, 0, meta))
         }
+    }
+
+    @Test
+    fun fullPinyinKeepsEngineBoundariesForVowelAliases() {
+        for (input in listOf("yvwo", "yuwo", "nvhai", "lvse", "lve", "xvan", "ni'hao", "nihaoshijie")) {
+            RimeEngine.selectSchema("pinyin")
+            RimeEngine.reset()
+            input.forEach { char ->
+                val key = if (char == '\'') KeyEvent.KEYCODE_APOSTROPHE else KeyEvent.KEYCODE_A + (char - 'a')
+                RimeEngine.onNormalKey(KeyEvent(KeyEvent.ACTION_UP, key))
+            }
+            val engine = Rime.compositionText
+            android.util.Log.i("RimeIntegrationTest", "input=$input native=$engine display=${RimeEngine.showComposition}")
+            assertEquals("Full pinyin must preserve native boundaries for $input", engine.lowercase(), RimeEngine.showComposition)
+            assertEquals(input, Rime.getRawInput())
+            if (input == "yvwo") {
+                assertTrue("Expected yu to remain a whole syllable", engine.startsWith("yv"))
+                assertFalse(RimeEngine.showComposition.startsWith("y'v"))
+                assertTrue("Expected the yu syllable to remain recognized", RimeEngine.showCandidates.any { it.text.contains("与") || it.text.contains("于") || it.text.contains("雨") })
+                assertTrue(RimeEngine.moveCaretTo(1))
+                RimeEngine.onDeleteKey()
+                assertEquals("vwo", Rime.getRawInput())
+            }
+        }
+        RimeEngine.reset()
     }
 
     @Test

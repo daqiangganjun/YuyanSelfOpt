@@ -173,13 +173,21 @@ class TerminalInputIntegrationTest {
             assertEquals(TerminalModifiers.State.Once, input.terminalInput.modifiers.alt)
             input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_RETURN))
             assertEquals(TerminalModifiers.State.Once, input.terminalInput.modifiers.alt)
-            input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_ENTER))
         }
+        settleKeyboard()
+        tapKeyboardKey(input, KeyEvent.KEYCODE_ENTER)
         awaitCondition("Alt+Enter must be emitted as a modified Enter key") {
             events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_ENTER && it.isAltPressed }
         }
         instrumentation.runOnMainSync {
             assertEquals(TerminalModifiers.State.Off, input.terminalInput.modifiers.alt)
+            events.clear()
+            input.processKeyUp(KeyEvent(0, 0, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER, 0, KeyEvent.META_ALT_ON))
+        }
+        awaitCondition("Hardware Alt+Enter must also reach the target in Chinese mode") {
+            events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_ENTER && it.isAltPressed }
+        }
+        instrumentation.runOnMainSync {
             editor.setOnKeyListener(null)
         }
     }
@@ -196,8 +204,8 @@ class TerminalInputIntegrationTest {
         lateinit var original: com.yuyan.imemodule.keyboard.container.BaseContainer
         instrumentation.runOnMainSync {
             val labels = descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().map { it.text.toString() }.toList()
-            assertEquals(listOf("TAB", "ESC", "CTRL", "ALT", "PGUP", "PGDN", "更多",
-                "SHIFT", "DEL", "F(n)", "^C", "^D", "^Z", "^L"), labels)
+            assertEquals(listOf("ESC", "TAB", "CTRL", "ALT", "PGUP", "PGDN", "收起",
+                "SHIFT", "DEL", "F(n)", "^Z", "^C", "^L", "退出"), labels)
             original = requireNotNull(KeyboardManager.instance.currentContainer)
             input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT)
         }
@@ -289,17 +297,148 @@ class TerminalInputIntegrationTest {
 
     private fun openTerminalFunctions(input: InputView) {
         instrumentation.runOnMainSync {
-            descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().first { it.text.toString() == "更多" }.performClick()
+            descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().firstOrNull { it.text.toString() == "更多" }?.performClick()
         }
-        var bounds = android.graphics.Rect()
-        awaitCondition("The terminal functions menu must open") {
-            val item = instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("功能键")?.firstOrNull()
-            item?.getBoundsInScreen(bounds)
-            item != null && !bounds.isEmpty
-        }
-        tapScreen(bounds.exactCenterX(), bounds.exactCenterY())
         awaitCondition("The numbered function-key button must become visible") {
             descendants(input.auxiliaryPanel.terminalKeys).any { it.tag == "terminal_function_key" && it.isShown }
+        }
+    }
+
+    @Test
+    fun composingBubbleKeepsTopCornersAndAcceptsRealCaretTaps() = withKeyboard { input, editor ->
+        val env = com.yuyan.imemodule.singleton.EnvironmentSingleton.instance
+        val floating = env.keyboardModeFloat
+        val theme = com.yuyan.imemodule.data.theme.ThemeManager.activeTheme
+        try {
+            for (mode in listOf(false, true)) {
+                instrumentation.runOnMainSync {
+                    env.keyboardModeFloat = mode
+                    env.initData()
+                    InputModeSwitcher.switchModeForSetting(InputModeSwitcher.MASK_SKB_LAYOUT_QWERTY_PINYIN to CustomConstant.SCHEMA_ZH_QWERTY)
+                    input.updateTheme()
+                    input.resetToIdleState()
+                    editor.text.clear()
+                    "nihao".forEach { input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_A + (it - 'a'))) }
+                }
+                settleKeyboard()
+                val bubble = descendants(input).filterIsInstance<TextView>().first { it.isShown && it.text.toString().contains("ni") && it.text.toString().contains("hao") }
+                val location = IntArray(2)
+                var x = 0f
+                var y = 0f
+                instrumentation.runOnMainSync {
+                    val background = bubble.background as android.graphics.drawable.GradientDrawable
+                    val corners = requireNotNull(background.cornerRadii)
+                    assertTrue(corners[0] > 0)
+                    assertEquals(if (mode) corners[0] else 0f, corners[4], 0.001f)
+                    assertEquals(theme.keyTextColor, bubble.currentTextColor)
+                    bubble.getLocationOnScreen(location)
+                    x = location[0] + bubble.paddingLeft + bubble.layout.getPrimaryHorizontal(2)
+                    y = location[1] + bubble.height / 2f
+                }
+                tapScreen(x, y)
+                awaitCondition("A real screen tap must enter composition editing") { com.yuyan.imemodule.service.DecodingInfo.caretInComposition >= 0 }
+                instrumentation.runOnMainSync {
+                    input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_M))
+                    assertEquals("nimhao", com.yuyan.inputmethod.core.Rime.getRawInput())
+                    assertTrue(editor.text.isEmpty())
+                    assertTrue("Composing editing must retain host focus", editor.hasFocus())
+                    assertFalse(bubble.isFocused)
+                }
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                input.resetToIdleState()
+                env.keyboardModeFloat = floating
+                env.initData()
+                input.updateTheme()
+            }
+        }
+    }
+
+    @Test
+    fun terminalExpansionPersistsAndEditorEnterCarriesAlt() = withKeyboard { input, editor ->
+        val events = mutableListOf<KeyEvent>()
+        instrumentation.runOnMainSync {
+            if (!InputModeSwitcher.isTerminalMode) input.toggleTerminalMode()
+            editor.setOnKeyListener { _, _, event -> events.add(KeyEvent(event)); true }
+            val first = (input.auxiliaryPanel.terminalKeys.getChildAt(0) as ViewGroup)
+            assertEquals("ESC", (first.getChildAt(0) as TextView).text.toString())
+            assertEquals("TAB", (first.getChildAt(1) as TextView).text.toString())
+        }
+        openTerminalFunctions(input)
+        instrumentation.runOnMainSync {
+            val labels = descendants(input.auxiliaryPanel.terminalKeys).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }.toList()
+            assertEquals(listOf("SHIFT", "DEL", "F(n)", "^Z", "^C", "^L", "退出"), labels.takeLast(7))
+            input.finishAuxiliaryInput()
+            input.auxiliaryPanel.onStartInput(false)
+            assertTrue(descendants(input.auxiliaryPanel.terminalKeys).any { it.tag == "terminal_function_key" && it.isShown })
+            input.onSettingsMenuClick(SkbMenuMode.TextEdit)
+        }
+        settleKeyboard()
+        instrumentation.runOnMainSync {
+            val keys = requireNotNull(findKeyboard(input)?.getSoftKeyboard())
+            assertNotNull(keys.getKeyByCode(KeyEvent.KEYCODE_ENTER))
+            assertNull(keys.getKeyByCode(KeyEvent.KEYCODE_DEL))
+            input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT)
+        }
+        tapKeyboardKey(input, KeyEvent.KEYCODE_ENTER)
+        awaitCondition("Editor Enter must retain Alt") { events.any { it.action == KeyEvent.ACTION_DOWN && it.keyCode == KeyEvent.KEYCODE_ENTER && it.isAltPressed } }
+        instrumentation.runOnMainSync {
+            input.toggleTerminalMode()
+            val keys = requireNotNull(findKeyboard(input)?.getSoftKeyboard())
+            assertNotNull(keys.getKeyByCode(KeyEvent.KEYCODE_DEL))
+            editor.setOnKeyListener(null)
+        }
+    }
+
+    @Test
+    fun reorderedMenuCanCloseReopenAndDragAgain() = withKeyboard { input, _ ->
+        instrumentation.runOnMainSync { input.onSettingsMenuClick(SkbMenuMode.SettingsMenu) }
+        settleKeyboard()
+        repeat(2) {
+            val container = KeyboardManager.instance.currentContainer as com.yuyan.imemodule.keyboard.container.SettingsContainer
+            val beforeOrder = container.funItems.map { it.skbMenuMode }
+            instrumentation.runOnMainSync { container.enableDragItem(true) }
+            settleKeyboard()
+            val recycler = descendants(container).filterIsInstance<androidx.recyclerview.widget.RecyclerView>().first()
+            saveUiSnapshot("tmp_menu_drag_before.png")
+            val origin = IntArray(2)
+            val target = IntArray(2)
+            instrumentation.runOnMainSync {
+                val first = recycler.getChildAt(0).findViewById<View>(com.yuyan.imemodule.R.id.entrance_image)
+                val second = recycler.getChildAt(1).findViewById<View>(com.yuyan.imemodule.R.id.entrance_image)
+                first.getLocationOnScreen(origin); second.getLocationOnScreen(target)
+                origin[0] += first.width / 2; origin[1] += first.height / 2
+                target[0] += second.width / 2; target[1] += second.height / 2
+                target[0] += (12 * context.resources.displayMetrics.density).toInt()
+            }
+            val time = SystemClock.uptimeMillis()
+            fun send(action: Int, x: Float, y: Float) {
+                val event = MotionEvent.obtain(time, SystemClock.uptimeMillis(), action, x, y, 0)
+                instrumentation.sendPointerSync(event); event.recycle()
+            }
+            send(MotionEvent.ACTION_DOWN, origin[0].toFloat(), origin[1].toFloat())
+            Thread.sleep(150)
+            for (step in 1..12) {
+                send(MotionEvent.ACTION_MOVE, origin[0] + (target[0] - origin[0]) * step / 12f, origin[1] + (target[1] - origin[1]) * step / 12f)
+                Thread.sleep(40)
+            }
+            Thread.sleep(150)
+            send(MotionEvent.ACTION_UP, target[0].toFloat(), target[1].toFloat())
+            settleKeyboard()
+            saveUiSnapshot("tmp_menu_drag_after.png")
+            instrumentation.runOnMainSync {
+                container.enableDragItem(false)
+                assertNotEquals("The gesture must actually reorder items", beforeOrder, container.funItems.map { it.skbMenuMode })
+                input.onSettingsMenuClick(SkbMenuMode.SettingsMenu)
+                input.onSettingsMenuClick(SkbMenuMode.SettingsMenu)
+            }
+            settleKeyboard()
+            instrumentation.runOnMainSync {
+                val reopened = KeyboardManager.instance.currentContainer as com.yuyan.imemodule.keyboard.container.SettingsContainer
+                assertTrue(reopened.isShown)
+                assertEquals(reopened.funItems.map { it.skbMenuMode.name }, com.yuyan.imemodule.database.DataBaseKT.instance.skbFunDao().getAllMenu().map { it.name })
+            }
         }
     }
 
@@ -360,17 +499,245 @@ class TerminalInputIntegrationTest {
     }
 
     @Test
+    fun clipboardSearchKeepsQueriesLocalAndPastesTheFilteredRow() = withKeyboard { input, editor ->
+        val database = com.yuyan.imemodule.database.DataBaseKT.instance
+        val prefix = "clip" + java.util.UUID.randomUUID().toString().filter { it in 'a'..'f' }.take(6)
+        val first = "${prefix}Alpha 剪贴板检索"
+        val second = "${prefix}Beta 另一条记录"
+        val chinese = "${prefix}你好检索"
+        val query = prefix + "alpha"
+        try {
+            database.clipboardDao().insert(com.yuyan.imemodule.database.entry.Clipboard(first))
+            database.clipboardDao().insert(com.yuyan.imemodule.database.entry.Clipboard(second))
+            database.clipboardDao().insert(com.yuyan.imemodule.database.entry.Clipboard(chinese))
+            instrumentation.runOnMainSync {
+                if (InputModeSwitcher.isTerminalMode) input.toggleTerminalMode()
+                InputModeSwitcher.switchModeForSetting(InputModeSwitcher.MASK_SKB_LAYOUT_QWERTY_PINYIN to CustomConstant.SCHEMA_ZH_QWERTY)
+                input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_LANG))
+                input.resetToIdleState()
+                editor.setText("host:")
+                editor.setSelection(editor.length())
+            }
+            settleKeyboard()
+            instrumentation.runOnMainSync { input.onSettingsMenuClick(SkbMenuMode.ClipBoard) }
+            settleKeyboard()
+            instrumentation.runOnMainSync {
+                val toolbar = com.yuyan.imemodule.data.candidateToolbarItems(emptyList(), SkbMenuMode.ClipBoard).map { it.skbMenuMode }
+                assertEquals("Search must sit left of delete in the reversed toolbar",
+                    listOf(SkbMenuMode.ClearClipBoard, SkbMenuMode.ClipboardSearch), toolbar.takeLast(2))
+                assertFalse("Without a query the filter bar must not take space",
+                    descendants(input).any { it.tag == "clipboard_search_label" && it.isShown })
+                assertEquals("The floating enter key must follow its switch",
+                    AppPrefs.getInstance().clipboard.clipboardFloatingEnter.getValue(),
+                    descendants(input).any { it.tag == "clipboard_floating_enter" && it.isShown })
+                input.onSettingsMenuClick(SkbMenuMode.ClipboardSearch)
+                assertTrue(input.isClipboardSearchActive)
+                val source = descendants(input).filterIsInstance<android.widget.EditText>().first { it.tag == "clipboard_search_query" }
+                assertTrue("The search box must take local focus so the caret is drawn", source.isFocused)
+            }
+            settleKeyboard()
+            instrumentation.runOnMainSync {
+                assertTrue("Search must survive switching back to the typing keyboard", input.isClipboardSearchActive)
+                if (!InputModeSwitcher.isEnglish) input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_LANG))
+            }
+            awaitCondition("Search requires the English typing mode", { diagnostics(input, editor) }) { EngineRuntime.isReady && InputModeSwitcher.isEnglish }
+            query.forEach { char -> tapKeyboardKey(input, KeyEvent.KEYCODE_A + (char - 'a')) }
+            instrumentation.runOnMainSync { context.getSystemService(android.view.inputmethod.InputMethodManager::class.java).restartInput(editor) }
+            settleKeyboard()
+            instrumentation.runOnMainSync {
+                assertTrue("Input restart must retain local search", input.isClipboardSearchActive)
+                assertTrue("Input restart must retain the selected language", InputModeSwitcher.isEnglish)
+                val source = descendants(input).filterIsInstance<android.widget.EditText>().first { it.tag == "clipboard_search_query" }
+                assertEquals("Search route active=${input.isClipboardSearchActive}, host=${editor.text}, local=${input.localInputConnection}, english=${InputModeSwitcher.isEnglish}, ready=${EngineRuntime.isReady}, raw=${com.yuyan.inputmethod.core.Rime.getRawInput()}", query, source.text.toString())
+                assertEquals("Search input must not reach the host editor", "host:", editor.text.toString())
+                descendants(input).first { it.tag == "clipboard_search_submit" }.performClick()
+                assertFalse(input.isClipboardSearchActive)
+            }
+            settleKeyboard()
+            val container = requireNotNull(KeyboardManager.instance.currentContainer as? com.yuyan.imemodule.keyboard.container.ClipBoardContainer)
+            saveUiSnapshot("tmp_clipboard_search.png")
+            instrumentation.runOnMainSync {
+                val list = descendants(container).filterIsInstance<com.yuyan.imemodule.libs.recyclerview.SwipeRecyclerView>().single()
+                assertEquals(1, list.adapter!!.itemCount)
+                val text = descendants(list).filterIsInstance<TextView>().first { it.id == com.yuyan.imemodule.R.id.clipboard_adapter_content }
+                assertEquals(first, text.text.toString())
+                assertEquals(android.view.Gravity.LEFT, android.view.Gravity.getAbsoluteGravity(text.gravity, View.LAYOUT_DIRECTION_LTR) and android.view.Gravity.HORIZONTAL_GRAVITY_MASK)
+                assertTrue("The filtered row must be clickable", text.parent.let { (it as View).performClick() } || list.findViewHolderForAdapterPosition(0)!!.itemView.performClick())
+            }
+            awaitCondition("Pasting must select the matching row", { editor.text.toString() }) { editor.text.toString() == "host:$first" }
+            instrumentation.runOnMainSync { input.onSettingsMenuClick(SkbMenuMode.ClipBoard) }
+            settleKeyboard()
+            instrumentation.runOnMainSync {
+                val current = KeyboardManager.instance.currentContainer as com.yuyan.imemodule.keyboard.container.ClipBoardContainer
+                current.showClipBoardView(SkbMenuMode.ClipBoard, prefix + "nomatch")
+                val list = descendants(current).filterIsInstance<com.yuyan.imemodule.libs.recyclerview.SwipeRecyclerView>().single()
+                assertEquals(0, list.adapter!!.itemCount)
+                assertTrue(descendants(current).filterIsInstance<TextView>().any { it.text.toString() == "没有匹配的内容" && it.isShown })
+                assertTrue("A query shows the filter bar", descendants(current).any { it.tag == "clipboard_search_label" && it.isShown })
+                descendants(current).first { it.tag == "clipboard_search_clear" }.performClick()
+                assertTrue(list.adapter!!.itemCount >= 2)
+                input.onSettingsMenuClick(SkbMenuMode.ClipboardSearch)
+            }
+            settleKeyboard()
+            tapKeyboardKey(input, KeyEvent.KEYCODE_A)
+            instrumentation.runOnMainSync {
+                descendants(input).first { it.tag == "clipboard_search_cancel" }.performClick()
+                assertFalse(input.isClipboardSearchActive)
+                assertEquals("Cancelling search must not modify the host", "host:$first", editor.text.toString())
+                input.onSettingsMenuClick(SkbMenuMode.ClipboardSearch)
+                if (InputModeSwitcher.isEnglish) input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_LANG))
+            }
+            settleKeyboard()
+            awaitCondition("Chinese search must retain its input mode") { EngineRuntime.isReady && InputModeSwitcher.isChinese }
+            "nihao".forEach { tapKeyboardKey(input, KeyEvent.KEYCODE_A + (it - 'a')) }
+            instrumentation.runOnMainSync {
+                val candidate = com.yuyan.inputmethod.RimeEngine.showCandidates.indexOfFirst { it.text == "你好" }
+                assertTrue("Chinese search must expose matching candidates", candidate >= 0)
+                input.chooseAndUpdate(candidate)
+                val source = descendants(input).filterIsInstance<android.widget.EditText>().first { it.tag == "clipboard_search_query" }
+                assertEquals("你好", source.text.toString())
+                assertEquals("host:$first", editor.text.toString())
+                descendants(input).first { it.tag == "clipboard_search_submit" }.performClick()
+            }
+            settleKeyboard()
+            instrumentation.runOnMainSync {
+                val current = KeyboardManager.instance.currentContainer as com.yuyan.imemodule.keyboard.container.ClipBoardContainer
+                assertTrue("Chinese search must show the matching clipboard record", descendants(current).filterIsInstance<TextView>().any { it.id == com.yuyan.imemodule.R.id.clipboard_adapter_content && it.text.toString() == chinese })
+            }
+        } finally {
+            database.clipboardDao().deleteByContent(first)
+            database.clipboardDao().deleteByContent(second)
+            database.clipboardDao().deleteByContent(chinese)
+        }
+    }
+
+    @Test
+    fun repeatedEnglishShiftPreservesEveryTypedCapital() = withKeyboard { input, editor ->
+        val prefs = AppPrefs.getInstance().input
+        val previousCompletion = prefs.abcSearchEnglishCell.getValue()
+        val previousSpace = prefs.abcSpaceAuto.getValue()
+        try {
+            for (completion in listOf(false, true)) {
+                instrumentation.runOnMainSync {
+                    prefs.abcSearchEnglishCell.setValue(completion)
+                    prefs.abcSpaceAuto.setValue(false)
+                    if (InputModeSwitcher.isTerminalMode) input.toggleTerminalMode()
+                    InputModeSwitcher.switchModeForSetting(InputModeSwitcher.MASK_SKB_LAYOUT_QWERTY_PINYIN to CustomConstant.SCHEMA_ZH_QWERTY)
+                    input.responseKeyEvent(SoftKey(InputModeSwitcher.USER_KEYCODE_LANG))
+                    input.resetToIdleState()
+                    editor.text.clear()
+                }
+                settleKeyboard()
+                for ((letter, expected) in listOf(KeyEvent.KEYCODE_A to "A", KeyEvent.KEYCODE_B to "AB")) {
+                    tapKeyboardKey(input, KeyEvent.KEYCODE_SHIFT_LEFT)
+                    tapKeyboardKey(input, letter)
+                    awaitCondition("A repeated one-shot shift must preserve $expected with completion=$completion") { editor.text.toString() == expected }
+                    assertTrue("Typing must consume the one-shot shift", InputModeSwitcher.isLower)
+                }
+                tapKeyboardKey(input, KeyEvent.KEYCODE_C)
+                awaitCondition("Typing after a one-shot capital must return to lower case") { editor.text.toString() == "ABc" }
+                if (completion) {
+                    instrumentation.runOnMainSync {
+                        val candidate = com.yuyan.inputmethod.RimeEngine.showCandidates.indexOfFirst { it.text == "ABc" }
+                        assertTrue("The literal candidate must retain mixed case", candidate >= 0)
+                        input.chooseAndUpdate(candidate)
+                    }
+                    awaitCondition("Selecting the candidate must retain typed capitals") { editor.text.toString() == "ABc" }
+                }
+                instrumentation.runOnMainSync {
+                    input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_SHIFT_LEFT))
+                    input.responseKeyEvent(SoftKey(KeyEvent.KEYCODE_SHIFT_LEFT))
+                    assertEquals("Two consecutive shift taps must still enable caps lock", KeyEvent.META_CAPS_LOCK_ON, InputModeSwitcher.mToggleStates.modifiers)
+                }
+                tapKeyboardKey(input, KeyEvent.KEYCODE_D)
+                assertEquals(KeyEvent.META_CAPS_LOCK_ON, InputModeSwitcher.mToggleStates.modifiers)
+                tapKeyboardKey(input, KeyEvent.KEYCODE_SHIFT_LEFT)
+                assertTrue("One tap must unlock caps lock", InputModeSwitcher.isLower)
+                tapKeyboardKey(input, KeyEvent.KEYCODE_E)
+                awaitCondition("Caps lock must preserve the existing prefix") { editor.text.toString() == "ABcDe" }
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                prefs.abcSearchEnglishCell.setValue(previousCompletion)
+                prefs.abcSpaceAuto.setValue(previousSpace)
+                input.resetToIdleState()
+            }
+        }
+    }
+
+    @Test
+    fun keyboardPositionTracksSinglePixelDrags() = withKeyboard { input, _ ->
+        val env = com.yuyan.imemodule.singleton.EnvironmentSingleton.instance
+        val prefs = AppPrefs.getInstance().internal
+        val manager = KeyboardManager.instance
+        val previousFloating = env.keyboardModeFloat
+        val previousType = requireNotNull(manager.currentKeyboardType)
+        val paddingKeys = listOf(prefs.keyboardBottomPadding, prefs.keyboardRightPadding,
+            prefs.keyboardBottomPaddingFloat, prefs.keyboardRightPaddingFloat,
+            prefs.keyboardBottomPaddingLandscapeFloat, prefs.keyboardRightPaddingLandscapeFloat)
+        val previousPadding = paddingKeys.associateWith { it.getValue() }
+        try {
+            for (floating in listOf(false, true)) {
+                val bottom = if (!floating) prefs.keyboardBottomPadding else if (env.isLandscape)
+                    prefs.keyboardBottomPaddingLandscapeFloat else prefs.keyboardBottomPaddingFloat
+                instrumentation.runOnMainSync {
+                    bottom.setValue(40)
+                    env.keyboardModeFloat = floating
+                    env.initData()
+                    manager.clearKeyboard()
+                    manager.switchKeyboard(KeyboardManager.KeyboardType.QWERTYABC)
+                }
+                settleKeyboard()
+                val container = requireNotNull(manager.currentContainer)
+                instrumentation.runOnMainSync { container.setKeyboardHeight() }
+                settleKeyboard()
+                val handle = container.findViewById<View>(com.yuyan.imemodule.R.id.iv_keyboard_move)
+                for (distance in listOf(-1f, -2f, 1f, 2f)) {
+                    val expected = bottom.getValue() - distance.toInt()
+                    dragResizeHandle(handle, distance)
+                    settleKeyboard()
+                    instrumentation.runOnMainSync {
+                        assertEquals("A small drag must persist pixel-level movement", expected, bottom.getValue())
+                        assertEquals(expected, if (floating) input.paddingBottom else input.mSkbRoot.paddingBottom)
+                    }
+                }
+                dragResizeHandle(handle, 1000f)
+                assertEquals("Dragging down must stop at the lower edge", 0, bottom.getValue())
+                dragResizeHandle(handle, -1f)
+                assertEquals("The keyboard must be movable after reaching the edge", 1, bottom.getValue())
+                instrumentation.runOnMainSync { container.findViewById<View>(com.yuyan.imemodule.R.id.ll_keyboard_height_sure).performClick() }
+                settleKeyboard()
+                if (floating) {
+                    val bar = input.mSkbRoot.findViewById<ViewGroup>(com.yuyan.imemodule.R.id.iv_keyboard_holder).getChildAt(0)
+                    dragResizeHandle(bar, -1f)
+                    assertEquals("The floating drag bar must use the same fine movement", 2, bottom.getValue())
+                }
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                previousPadding.forEach { (key, value) -> key.setValue(value) }
+                env.keyboardModeFloat = previousFloating
+                env.initData()
+                manager.clearKeyboard()
+                manager.switchKeyboard(previousType)
+            }
+        }
+    }
+
+    @Test
     fun keyboardResizeKeepsKeysAttachedAndAdjustmentControlsUsable() = withKeyboard { input, editor ->
         val env = com.yuyan.imemodule.singleton.EnvironmentSingleton.instance
         val manager = KeyboardManager.instance
         val savedHeight = env.keyBoardHeightRatio
         val savedFloating = env.keyboardModeFloat
         val savedBorder = com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyBorder.getValue()
+        val savedMargin = com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyYMargin.getValue()
         val initialType = requireNotNull(manager.currentKeyboardType)
         try {
             for (floating in listOf(false, true)) {
                 instrumentation.runOnMainSync {
                     com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyBorder.setValue(true)
+                    com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyYMargin.setValue(100)
                     env.keyboardModeFloat = floating
                     env.keyBoardHeightRatio = 0.3f
                     env.initData()
@@ -402,6 +769,14 @@ class TerminalInputIntegrationTest {
                         assertEquals(env.skbHeight, keyboard.height)
                         assertTrue("Resize controls must remain above the keyboard", handle!!.isShown)
                         assertEquals("Resizing must not replace the IME window layout parameters", rootLayoutParamsType, input.rootView.layoutParams.javaClass)
+                        val bar = descendants(input).filterIsInstance<com.yuyan.imemodule.view.CandidatesBar>().first()
+                        val barPosition = IntArray(2).also(bar::getLocationOnScreen)
+                        val keyPosition = IntArray(2).also(keyboard::getLocationOnScreen)
+                        assertTrue("Toolbar must end above the first key row", barPosition[1] + bar.height <= keyPosition[1])
+                        descendants(bar).filterIsInstance<android.widget.ImageView>().filter { it.isShown }.forEach { icon ->
+                            val position = IntArray(2).also(icon::getLocationOnScreen)
+                            assertTrue("Toolbar icons must fit without vertical clipping", position[1] >= barPosition[1] && position[1] + icon.height <= barPosition[1] + bar.height)
+                        }
                     }
                     val expandedHeight = keyboard.height
                     dragResizeHandle(requireNotNull(handle), 60f * context.resources.displayMetrics.density)
@@ -437,6 +812,7 @@ class TerminalInputIntegrationTest {
             instrumentation.runOnMainSync {
                 env.keyboardModeFloat = savedFloating
                 com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyBorder.setValue(savedBorder)
+                com.yuyan.imemodule.data.theme.ThemeManager.prefs.keyYMargin.setValue(savedMargin)
                 env.keyBoardHeightRatio = savedHeight
                 env.initData()
                 com.yuyan.imemodule.utils.KeyboardLoaderUtil.instance.clearKeyboardMap()
@@ -951,6 +1327,14 @@ class TerminalInputIntegrationTest {
             val previousClip = clipboard.primaryClip
             val resultFile = "tmp_yuyan_terminal_${java.util.UUID.randomUUID().toString().replace("-", "")}.txt"
             var createdSession = false
+            val historyFile = resultFile + ".history"
+            val termuxPid = shell("pidof com.termux").toInt()
+            fun shellChildren(): Set<Int> = shell("ps -A -o PID,PPID,NAME").lineSequence()
+                .map { it.trim().split(Regex("\\s+")) }
+                .filter { it.size >= 3 && it[1].toIntOrNull() == termuxPid && it[2] in setOf("bash", "zsh", "fish", "sh", "login") }
+                .mapNotNull { it[0].toIntOrNull() }.toSet()
+            val originalShells = shellChildren()
+            var testShell: Int? = null
             val service = InputView::class.java.getDeclaredField("service").apply { isAccessible = true }.get(input) as com.yuyan.imemodule.service.ImeService
             fun key(code: Int) {
                 instrumentation.runOnMainSync { input.responseKeyEvent(SoftKey(code)) }
@@ -991,11 +1375,12 @@ class TerminalInputIntegrationTest {
                 assertEquals("The real terminal must produce the expected result", expected, readResult())
             }
             fun closeSession() {
+                instrumentation.runOnMainSync { input.terminalInput.modifiers.clear() }
                 nativeKey(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON)
                 nativeKey(KeyEvent.KEYCODE_U, KeyEvent.META_CTRL_ON)
                 nativeKey(KeyEvent.KEYCODE_D, KeyEvent.META_CTRL_ON)
-                Thread.sleep(400)
-                nativeKey(KeyEvent.KEYCODE_ENTER)
+                val deadline = SystemClock.uptimeMillis() + 5000
+                while (testShell in shellChildren() && SystemClock.uptimeMillis() < deadline) Thread.sleep(100)
                 settleKeyboard()
             }
             try {
@@ -1004,15 +1389,21 @@ class TerminalInputIntegrationTest {
                     service.currentInputEditorInfo?.packageName == "com.termux" && input.isShown
                 }
                 settleKeyboard()
-                if (InstrumentationRegistry.getArguments().getString("termuxCloseTemporarySession") == "true") closeSession()
                 nativeKey(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON or KeyEvent.META_ALT_ON)
+                val sessionDeadline = SystemClock.uptimeMillis() + 10_000
+                while (SystemClock.uptimeMillis() < sessionDeadline) {
+                    val added = shellChildren() - originalShells
+                    if (added.size == 1) { testShell = added.single(); break }
+                    Thread.sleep(100)
+                }
+                assertNotNull("A separate Termux shell must exist before sending test commands", testShell)
                 createdSession = true
                 settleKeyboard()
                 instrumentation.runOnMainSync {
                     if (!InputModeSwitcher.isTerminalMode) input.toggleTerminalMode()
                 }
                 settleKeyboard()
-                text("printf '%s' ready > $resultFile")
+                text("cd /data/data/com.termux/files/home; HISTFILE=/data/data/com.termux/files/home/$historyFile; history -c; printf '%s' ready > $resultFile")
                 key(KeyEvent.KEYCODE_ENTER)
                 awaitResult("ready")
                 settleKeyboard()
@@ -1055,11 +1446,19 @@ class TerminalInputIntegrationTest {
                 settleKeyboard()
                 key(KeyEvent.KEYCODE_ENTER)
                 awaitResult("termina_lpaste_okinterrupt_ok")
+                text(": > $resultFile")
+                key(KeyEvent.KEYCODE_ENTER)
+                text("printf '%s\\n' repeat >> $resultFile")
+                tapKeyboardKey(input, KeyEvent.KEYCODE_ENTER)
+                awaitResult("repeat")
+                tapKeyboardKey(input, KeyEvent.KEYCODE_DPAD_UP)
+                tapKeyboardKey(input, KeyEvent.KEYCODE_ENTER)
+                awaitResult("repeat\nrepeat")
                 text("stty -icanon -echo; dd bs=1 count=2 2>/dev/null | od -An -tx1 > $resultFile; stty icanon echo")
                 key(KeyEvent.KEYCODE_ENTER)
                 settleKeyboard()
                 instrumentation.runOnMainSync { input.terminalInput.modifiers.toggle(KeyEvent.KEYCODE_ALT_LEFT) }
-                key(KeyEvent.KEYCODE_ENTER)
+                tapKeyboardKey(input, KeyEvent.KEYCODE_ENTER)
                 val altDeadline = SystemClock.uptimeMillis() + 10_000
                 while (SystemClock.uptimeMillis() < altDeadline && readResult() !in setOf("1b 0a", "1b 0d")) Thread.sleep(100)
                 assertTrue("Alt+Enter must deliver Escape followed by a newline", readResult() in setOf("1b 0a", "1b 0d"))
@@ -1078,13 +1477,14 @@ class TerminalInputIntegrationTest {
                     assertSame("Termux function-key input must restore its original keyboard", originalKeyboard, KeyboardManager.instance.currentContainer)
                 }
             } finally {
-                if (createdSession && service.currentInputEditorInfo?.packageName == "com.termux") closeSession()
-                shell("run-as com.termux rm -f files/home/$resultFile")
+                if (createdSession && testShell in shellChildren() && service.currentInputEditorInfo?.packageName == "com.termux") closeSession()
+                shell("run-as com.termux rm -f files/home/$resultFile files/home/$historyFile")
                 instrumentation.runOnMainSync {
                     if (previousClip != null) clipboard.setPrimaryClip(previousClip)
                     else if (android.os.Build.VERSION.SDK_INT >= 28) clipboard.clearPrimaryClip()
                     else clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
                 }
+                assertTrue("Original Termux shells must survive the test", shellChildren().containsAll(originalShells))
             }
         }
     }
@@ -1302,7 +1702,7 @@ class TerminalInputIntegrationTest {
         val previousEnabled = shell("settings get secure enabled_input_methods").trim('\'', '"')
         val preferences = PreferenceManager.getDefaultSharedPreferences(context)
         val suggestionKey = AppPrefs.getInstance().clipboard.clipboardSuggestion.key
-        val keys = listOf("input_default_method_mode", "input_method_pinyin_mode", "input_method_pinyin_mode_rime", "flower_typeface_mode", "last_flower_typeface_mode", suggestionKey)
+        val keys = listOf("input_default_method_mode", "input_method_pinyin_mode", "input_method_pinyin_mode_rime", "flower_typeface_mode", "last_flower_typeface_mode", "terminal_functions_expanded", suggestionKey)
         val previous = keys.associateWith { preferences.all[it] }
         val previousLock = CustomConstant.lockClipBoardEnable
         preferences.edit().putString("flower_typeface_mode", "Disabled").putBoolean(suggestionKey, false).commit()
@@ -1316,7 +1716,7 @@ class TerminalInputIntegrationTest {
             shell("settings put secure default_input_method $component")
             activity = instrumentation.startActivitySync(Intent(context, ImeTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             shell("am start -n ${context.packageName}/com.yuyan.ImeTestActivity --activity-single-top")
-            val editor = activity.findViewById<EditText>(android.R.id.edit)
+            var editor = activity.findViewById<EditText>(android.R.id.edit)
             instrumentation.runOnMainSync {
                 editor.requestFocus()
                 context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
@@ -1326,6 +1726,13 @@ class TerminalInputIntegrationTest {
             var ready = false
             while (SystemClock.uptimeMillis() < deadline) {
                 instrumentation.runOnMainSync {
+                    val resumed = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                        .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).filterIsInstance<ImeTestActivity>().firstOrNull()
+                    if (resumed != null && resumed !== activity) {
+                        activity = resumed
+                        editor = resumed.findViewById(android.R.id.edit)
+                    }
+                    if (editor.hasWindowFocus() && !editor.hasFocus()) editor.requestFocus()
                     var ancestor: View? = KeyboardManager.instance.currentContainer as? View
                     while (ancestor != null && ancestor !is InputView) ancestor = ancestor.parent as? View
                     input = ancestor as? InputView

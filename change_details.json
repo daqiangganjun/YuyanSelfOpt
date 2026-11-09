@@ -1,7 +1,393 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-04",
+  "updatedAt": "2026-11-09",
   "entries": [
+    {
+      "id": "20261109-04",
+      "date": "2026-11-09",
+      "type": "feat",
+      "title": "语音缓存整段发送与上滑暂停、面板让出空格行，剪贴板搜索入口与悬浮回车，版本5.5.0",
+      "trigger": "用户提出四项优化：1 语音提示「连接成功后即可说话」需要等待，希望去掉提示，先缓存、连接后整段发送；2 上滑取消太突然，希望先进入取消提示、暂停识别、松手才清除，并可下滑恢复；3 语音面板覆盖整个输入法，至少不要盖住空格；4 剪贴板搜索按钮移到工具栏删除键左侧，搜索框不显示光标、终端模式下会隐藏终端按键行、高度偏高，希望复用花漾字输入框。答复问答时追加：新增开关控制剪贴板右下角常驻的悬浮回车键，方便锁定剪贴板后连续发送。",
+      "rootCause": "语音：录音在 SpeechListener.onReady（WebSocket 握手完成）之后才开始，只能先提示等待；上滑超过 48dp 时 BaseKeyboardView 立即调用取消；面板高度取 mSkbRoot 的完整高度。剪贴板：搜索入口是容器顶部 44dp 的整行按钮；搜索框 ImeSourceEditText 没有像花漾字那样显式开启 focusableInTouchMode，requestFocus 失败，导致不画光标、点击也不能定位（根据代码差异推断，改用共用组件后真机上已显示光标并能定位）；InputView.updateCandidateBar 在搜索时主动隐藏 terminalKeys；搜索栏固定 44dp 加上下内边距，约 52dp。",
+      "solution": "按用户选择实现。语音：start 时立即启动录音线程，新增 AudioUplink 按顺序暂存连接前的 PCM（上限 20 秒），onReady 时连续补发再转实时发送，结束请求延后到补发之后；豆包发送队列上限从 256 KB 放宽到 1 MB；面板一出现就显示「正在聆听」。上滑超过 48dp 进入「松开取消」（面板变色提示、淡化预览），回落到 32dp 以下恢复；期间录音不停，改发等长静音帧，暂停时说的话被丢弃；UP 时仍处于取消状态才取消，面板自身的上滑同样处理。按下空格时把空格键行顶部的窗口坐标传给面板，面板下边界止于空格行之上。剪贴板：新增 SkbMenuMode.ClipboardSearch，追加到工具栏菜单末尾（反向布局下位于删除或添加的左侧），有搜索条件时图标高亮；容器去掉整行入口，只在有条件时显示 32dp 细栏「搜索：关键词　清除」，点击关键词可再次修改。抽出 ImeInlineEditor（底框、本地光标、清空按钮、主题），花漾字处理栏与搜索栏共用，搜索栏行高与花漾字一致；按用户选择，搜索时保留终端按键行，且按键作用于本地搜索框。新增 clipboard_floating_enter 开关（默认开启），开启后剪贴板和常用语页右下角显示回车键，经 responseKeyEvent(SoftKey(ENTER)) 走与键盘回车相同的路径，列表底部留出相应空白。按版本规范升至 5.5.0，未单独构建的 5.4.6 改动一并并入。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/speech/VoiceInputController.kt：立即录音、AudioUplink 暂存补发、静音暂停、面板截止到空格行",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/speech/VoiceInputPanel.kt：移除连接中状态，新增松开取消状态与回差手势",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/speech/DoubaoSpeechProvider.kt：发送队列上限放宽到 1 MB",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/BaseKeyboardView.kt、keyboard/InputView.kt、service/ImeService.kt：空格长按的取消状态切换、松手决定提交或取消、传递空格行坐标；搜索时保留终端行",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/view/ImeInlineEditor.kt（新增）、view/KeyboardAuxiliaryPanel.kt、view/ClipboardSearchPanel.kt：共用输入条",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/ClipBoardContainer.kt、prefs/behavior/SkbMenuMode.kt、data/SkbFunData.kt、keyboard/SettingsMenuClick.kt、adapter/CandidatesMenuAdapter.kt、prefs/AppPrefs.kt：工具栏搜索入口、筛选细栏、悬浮回车与开关",
+        "yuyansdk/src/main/res/drawable/ic_menu_search.xml（新增）、res/values/strings_ui.xml：搜索图标与文案，删除不再使用的连接中文案",
+        "app/src/androidTest/java/com/yuyan/SpeechIntegrationTest.kt、TerminalInputIntegrationTest.kt：上滑后下滑恢复、面板不盖空格行、工具栏搜索位置、搜索框焦点、筛选细栏与悬浮回车开关",
+        "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本 5.5.0 与说明同步"
+      ],
+      "verification": "Release 构建成功（5.5.0/50500），androidTest 同步编译通过，按约定只做真机验证、未运行模拟器测试。真机（竖屏 Termius、终端模式、停靠）覆盖安装后：工具栏删除键左侧出现搜索图标，容器顶部整行入口消失，右下角显示悬浮回车键；打开搜索后输入框显示光标，边框加深，行高与工具栏一致，终端按键行保留；输入 ht 只进入搜索框，Termius 提示符不变，点击 h 与 t 之间再输入 x 得到 hxt，确认可以定位光标；提交后出现「搜索：hxt　清除」细栏、搜索图标高亮、空结果提示，点「清除」后恢复完整列表、取消高亮。测试中出现一次误操作：计算「清除」坐标时把显示坐标 1446 写成 1746，点中了悬浮回车键，向 Termius 的空命令行发送了一次回车，终端只多出一行提示符，没有执行命令；这也表明悬浮回车在终端模式下按终端路径发送。语音的整段补发、上滑暂停与下滑恢复、面板让出空格行由用户在真机上实测，反馈正常；我没有在真机上执行语音录音。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "输入法窗口不能获取窗口焦点，键盘内的本地输入框必须显式开启 focusableInTouchMode，否则 requestFocus 失败，自绘光标也不会出现。",
+        "在真机上点击宿主为终端或聊天应用的界面之前，要先由截图核对目标坐标；悬浮回车等会向宿主发送按键的控件附近，尤其要避免估算坐标。",
+        "Kotlin 尾随 lambda 绑定到最后一个参数；给已有构造函数新增回调参数时，要放在原回调之前或改用具名参数，避免破坏现有调用。"
+      ],
+      "localArtifacts": { "directory": "build/deliverables/5.5.0", "apk": "yuyanSelfOpt_5.5.0_release.apk", "sha256": "5fd164e4cd0fd6b6a3f7bf269fa30721b78d402c01f1109b98a9115a4e62bb89", "sizeBytes": 52534820, "checks": "版本50500/5.5.0，覆盖安装到真机成功；未重新核验签名与16KB对齐。", "remotePublished": false }
+    },
+    {
+      "id": "20261109-03",
+      "date": "2026-11-09",
+      "type": "chore",
+      "title": "补记Termius Alt+Enter问题后续：Termius更新至8.0.1后恢复正常",
+      "trigger": "用户反馈：此前在 Termius 中 Alt+Enter 无法换行（见 20261106-03），将 Termius 更新后再测已可正常使用，要求补记后续。",
+      "rootCause": "判断为 Termius 7.4.0 一侧的问题。依据：真机上 Termius 已于 2026-11-09 由 7.4.0 更新到 8.0.1（versionCode 1008）；输入法终端按键分发代码（keyboard/terminal/）自 5.2.1（SDK a8d50fc）起没有改动，5.4.1 至 5.4.6 的记录中也没有 Alt 或回车路由相关的变更（5.4.4 只新增了剪贴板搜索的回车提交）。未做远端字节对照，属于根据版本差异得出的推断。",
+      "solution": "不修改产品代码，只补记结论，并在 20261106-03 中加入后续指向。",
+      "changedFiles": [
+        "change_log.md、change_details.json：新增本条，并在 20261106-03 中补充 followUp"
+      ],
+      "verification": "用户在 Termius 8.0.1 中实测 Alt+Enter 可用；adb 确认 Termius 版本为 8.0.1、更新时间为 2026-11-09 14:45。本条没有重新采集字节。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "终端组合键异常要先排除宿主终端版本问题：同一输入法版本下，Termius 7.4.0 失败而 8.0.1 正常，输入法本身没有改动。"
+      ]
+    },
+    {
+      "id": "20261109-02",
+      "date": "2026-11-09",
+      "type": "fix",
+      "title": "悬浮键盘可拖到窗口顶部，终端按键高度跟随普通按键，版本5.4.6（未单独构建，并入5.5.0）",
+      "trigger": "用户在竖屏真机上使用终端模式加悬浮键盘，反馈：1 键盘不能拖到更上面；2 终端模拟键盘的按键高度不跟随普通按键，显得特别大。",
+      "rootCause": "问题1：真机实测向上拖到最大时触摸区顶部停在280px，而输入法窗口 frame 顶部为140px，二者相差140px，恰为状态栏高度；向下拖300px可正常移动，向上再拖到最大仍回到280，排除手势未命中。推断是输入法窗口 fitSides=TOP、fitTypes 含状态栏，decor 在 frame 已避开状态栏的基础上又垫了一次顶部内边距，使 InputView 顶部在 frame 顶部之下140px（横屏曾观察到键盘顶部同样停在140px）。该推断已在 5.5.0 真机上验证。问题2：KeyboardAuxiliaryPanel.cell() 把终端按键高度固定为 dp(40)、边距 dp(2)，该机560dpi下约140px；普通按键每行高度为 skbHeight/4 再扣上下 keyYMargin，约112px，且不随键盘高度调节变化。",
+      "solution": "悬浮时通过 window.attributes.fitInsetsTypes 只保留导航栏避让（API 30及以上），停靠时恢复状态栏加导航栏；在 initView 中随悬浮状态应用。终端按键行高改为 skbHeight/4 扣两侧 keyYMargin（Google 风格的 QWERTY 乘1.5），左右留白取 keyXMargin，在 terminalKeys 的 onMeasure 中同步所有按键，updateKeyboardSize 里显式请求其重新布局，使键盘高度调节后立即生效。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt：新增 applyWindowFitting，悬浮时不再对状态栏垫顶部内边距；updateKeyboardSize 请求终端按键重新布局",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt：terminalKeys 随键盘区高度与按键间距同步行高与留白",
+        "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本与说明同步"
+      ],
+      "verification": "5.4.6 未单独构建，改动随 5.5.0 构建并在真机验证。修复前复现数据：竖屏真机（终端模式加悬浮），触摸区 (320,280)-(1280,1077)；向下拖300px变为 (320,577)-(1280,1374)，再向上拖到最大回到 (320,280)-(1280,1077)。窗口 frame 为 [0,140][1280,2800]。5.5.0 真机结果：悬浮模式向上拖到底，触摸区为 (198,140)-(1158,909)，顶部达到窗口顶部（y=140，修复前为 280），证实问题来自窗口对状态栏多垫的顶部内边距；停靠和悬浮两种模式下终端按键与字母键的可见高度一致；测试后已恢复为停靠模式。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "输入法窗口的 decor 会按状态栏垫顶部内边距，悬浮键盘的可拖范围要以 InputView 实际范围为准，必要时调整 fitInsetsTypes。",
+        "自绘或手写布局的辅助按键行不要用固定 dp 高度，应取自 EnvironmentSingleton 的 skbHeight 与按键间距，才能跟随用户对键盘高度的调节。",
+        "子视图的 onMeasure 在父级 requestLayout 后可能因测量缓存不重走，尺寸依赖全局状态时要显式对该视图 requestLayout。"
+      ]
+    },
+    {
+      "id": "20261109-01",
+      "date": "2026-11-09",
+      "type": "fix",
+      "title": "修复横屏悬浮键盘底行被裁与横屏键盘偏左，版本5.4.5",
+      "trigger": "用户在真机横屏下发现悬浮键盘底部按键行显示不全，关闭再开启悬浮无效；同时发现横屏普通键盘偏左、没有铺满屏幕。",
+      "rootCause": "悬浮：键盘拖动上限按「屏幕高度减键盘高度」计算，没有扣掉窗口顶部的状态栏与刘海避让（实测140px），且键盘高度取自已被挤压的视图，每次拖动上限都会放宽（棘轮），键盘被推到顶部而底行被裁；InputView 加载时直接套用已保存的底边距、不做夹紧，重开悬浮读到的仍是旧值；拖动条在键盘最底部，被裁后无法再拖动自救；悬浮高度基准取 max(宽,高)×3/4 并与竖屏高度比例共用，不考虑窗口可用高度。实测悬浮触摸区仅526px高（窗口1280−顶部140−残留底边距约614），键盘自然高度约680px。偏左：横屏键盘宽度被刻意缩为70%，原靠 ll_input_keyboard_container 的 gravity=center_horizontal 居中；终端模式新增的 keyboard_auxiliary_panel（f357f17）与 keyboard_flower_panel（a8d50fc）为 match_parent，把 RelativeLayout 的内容整体撑到满宽，居中余量归零，按键区与候选栏贴到左侧。",
+      "solution": "按用户选择：横屏普通键盘去掉70%限制，铺满屏幕宽度。悬浮边距：新增 InputView.floatKeyboardOffsetLimits()，用键盘不受挤压的自然尺寸与 InputView 实际宽高计算右、下边距上限，InputView 与 BaseContainer 两处重复的拖动逻辑共用；按下时以视图当前边距为起点；布局后若键盘被顶到窗口顶部，则夹紧视图上的边距（不落盘，仅拖动松手时保存），已保存的残留值无需清数据即可自动修正。悬浮高度：窗口高度变化时记入 EnvironmentSingleton.floatMaxAreaHeight 并重算尺寸，initData 在悬浮模式下把按键区高度夹到总高度不超过窗口可用高度（下限为原高度的一半）。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/singleton/EnvironmentSingleton.kt：移除横屏70%宽度；新增 floatMaxAreaHeight，悬浮高度夹紧",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt：新增 floatKeyboardOffsetLimits、布局后同步窗口高度并夹紧边距；拖动上限改用自然尺寸",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/BaseContainer.kt：高度调节遮罩里的移动手柄改用同一套上限",
+        "app/src/androidTest/java/com/yuyan/RuntimeCompatibilityTest.kt：新增 floatingKeyboardHeightIsCappedToTheWindowArea",
+        "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本与说明同步"
+      ],
+      "verification": "Release 构建成功（5.4.5/50405），androidTest 同步编译通过。真机（横屏）先复现：悬浮触摸区 (1797,140)-(2757,666)，高526px、底行被裁；覆盖安装后悬浮触摸区变为 (1797,256)-(2757,899)，高643px，四行按键与拖动条完整显示，旧残留底边距被自动夹紧，无需清除数据；关闭悬浮后触摸区 (0,460)-(2800,1280)，按键铺满屏幕宽度。模拟器 emulator-5556 上定向回归3项通过：新增的悬浮高度夹紧用例、横屏悬浮高度偏好读写用例、keyboardPositionTracksSinglePixelDrags（拖动像素级位移与边界行为未变）。未覆盖：「残留边距加载后自动夹紧」没有自动化用例，只做了真机手动验证；本次未重新核验 APK 签名与16KB对齐。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "控件位置边界要按窗口内容区的实际尺寸算，不能用屏幕尺寸：窗口顶部有状态栏或刘海避让时，屏幕高度减控件高度会偏大。",
+        "拖动上限不能基于已被挤压的视图当前尺寸计算，否则每次拖动都会放宽一次。应测量未受挤压的自然尺寸。",
+        "RelativeLayout 的 gravity 是对子视图整体居中，任何一个 match_parent 子视图都会让整体撑满而使居中失效；往居中容器里加面板时要先检查这一点。",
+        "已保存的位置偏好在加载时必须做范围校验；拖动条位于被裁区域时用户无法自救。"
+      ],
+      "localArtifacts": { "directory": "build/deliverables/5.4.5", "apk": "yuyanSelfOpt_5.4.5_release.apk", "sha256": "c10c201e56470414819c818c8bc7635825234f8f629da97e0d2c3233bbfb7e7d", "sizeBytes": 52533692, "checks": "版本50405/5.4.5，覆盖安装到真机成功；未重新核验签名与16KB对齐。", "remotePublished": false }
+    },
+    {
+      "id": "20261108-02",
+      "date": "2026-11-08",
+      "type": "fix",
+      "title": "语音上滑取消、悬浮宽度与剪贴板搜索，版本5.4.4",
+      "trigger": "任务5要求语音上滑取消，任务6反馈长按语音撑满屏幕并补充主要复现条件为悬浮键盘、与横竖屏无关，任务7要求剪贴板左对齐和搜索。",
+      "rootCause": "语音长按期间MOVE仍交给普通空格手势，最终识别结果也可能在松开前直接提交。语音浮层MATCH_PARENT挂在自适应宽度根容器，测量时反向撑宽；词库准备提示条也使用外层满屏宽度并覆盖语音标题；固定行数预览缺少高度限制。剪贴板条目居中且缺少本地搜索输入路径；输入法重启会清理辅助状态并按宿主默认模式重置语言。",
+      "solution": "语音上滑优先于空格滑动，面板本身也支持上滑；最终结果等待松开，取消清空会话和缓存、停止剩余音频发送并拦截迟到回调。浮层移到外层InputView并锚定键盘内容宽高、提高层级，避免参与键盘测量；准备提示条两侧跟随键盘，预览按剩余高度分配。剪贴板条目起始对齐；新增临时搜索栏和本地InputConnection，输入后返回大小写不敏感筛选，支持空结果、清除、取消，保留置顶/时间顺序和准确的展示索引。搜索时同目标重启保留输入模式，切换或隐藏时退出。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/BaseKeyboardView.kt、speech/VoiceInputController.kt、VoiceInputPanel.kt、res/values/strings_ui.xml：上滑取消、等待松开、会话隔离与浮层尺寸",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/ClipBoardAdapter.kt、keyboard/container/ClipBoardContainer.kt、view/ClipboardSearchPanel.kt：条目对齐、筛选与本地搜索条",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt、TextKeyboard.kt、service/ImeService.kt：本地搜索路由、搜索回车、重启及模式保持、退出清理",
+        "app/src/androidTest/java/com/yuyan/SpeechIntegrationTest.kt、TerminalInputIntegrationTest.kt：真实PCM与悬浮尺寸、上滑取消和迟到结果、英文/中文搜索和宿主隔离回归",
+        "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本与说明同步"
+      ],
+      "verification": "编译和Debug构建通过。已通过悬浮键盘真实PCM录音、松开提交、提前最终结果等待和上滑取消后的迟到回调隔离，宽度与位置保持；语音面板上滑取消、横向触摸保留及花漾字编辑兼容通过。英文搜索输入、准确粘贴、清除、空结果和取消10.14秒通过。最终中文搜索、搜索中的输入法重启保持及宿主隔离通过。7项定向回归分轮通过；tests-final.log中6项通过，录音一项受固定等待时序影响，改为等待实际会话/PCM/提交后，tests-final-focused.log两项18.32秒通过。最终Release版本50404/5.4.4，v1/v2签名、ZIP完整性、16KB ZIP和两项ARM64 ELF对齐通过。界面证据voice-floating.png、clipboard-filtered.png。 最终外层浮层与准备提示条修复后，3项81.312秒通过，横屏悬浮专项1项10.532秒通过；截图voice-floating-final.png、voice-floating-landscape-final.png确认标题完整、键盘未扩宽，旋转设置已恢复。 最终包覆盖安装并成功显示输入法，证据release-smoke.png；默认输入法保持正式版，测试夹具与语音配置已恢复。日志位于tmp_voice_clipboard_20261108。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "自适应容器上的覆盖层不能用MATCH_PARENT决定自身范围，应使用已测量的内容宽高并扣除位置留白。",
+        "长按手势取消必须优先于普通空格滑动；服务提前返回最终结果也不能抢在松开前提交。",
+        "键盘内搜索需要本地编辑连接；重启保留搜索状态时，还须避免按宿主默认语言重置正在使用的输入模式。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.4.4",
+        "apk": "yuyanSelfOpt_5.4.4_release.apk",
+        "sha256": "39447a39968cf47fa5e49b3246f153f4eb5aa1a833f4de65cd679665fd2a8b10",
+        "sizeBytes": 52533701,
+        "checks": "版本50404/5.4.4，v1/v2签名、ZIP完整性、16KB ZIP和ARM64 ELF对齐通过；覆盖安装成功，真实PCM悬浮语音和上滑取消、中英文剪贴板搜索及宿主隔离分轮回归通过。",
+        "remotePublished": false
+      }
+    },
+    {
+      "id": "20261108-01",
+      "date": "2026-11-08",
+      "type": "fix",
+      "title": "按键效果开关、全拼分词、位置细调与英文Shift，版本5.4.3",
+      "trigger": "用户要求效果关闭仅由顶部开关控制，关闭缓存强度并置灰，滑条左端跟随系统；修复yvwo显示为y'vwo，新增键盘上下位置精细调节与重复一次大写输入修复。",
+      "rootCause": "声音滑条5至10、触感滑条1被复用为关闭哨兵，切换开关又重置数值。全拼显示层按候选注释公共前缀插入分词符，yu与yv差异造成额外分词。纵向拖动10像素门槛产生跳动，上界计算又包含当前位置留白。英文候选按整词首字母大写，覆盖中途大写；Shift计时未排除中间输入，可能误锁定。",
+      "solution": "新增独立开关，动态兼容旧关闭值且保留历史强度键，设备保护存储也复制有效状态；关闭缓存当前位置并禁用置灰，最左跟随系统、其余有效，系统音效和触感不绕过全局设置。全拼直接使用原生preedit；上下拖动按手势起点和1像素位移计算，排除位置留白求边界。英文候选、翻页与提交按原始按键编码逐字保留大小写，补全后缀按锁定状态处理；单调时钟仅计算连续Shift双击。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/AppPrefs.kt、InputFeedbacks.kt、ui/fragment/KeyboardFeedbacksFragment.kt及res/values/arrays.xml：独立开关、缓存强度、系统跟随与滑条映射",
+        "yuyansdk/src/main/java/com/yuyan/inputmethod/RimeEngine.kt、imemodule/manager/InputModeSwitcher.kt：原生全拼分词、逐字英文大小写和Shift双击状态",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt、container/BaseContainer.kt：普通和悬浮纵向连续拖动",
+        "app/src/androidTest/java/com/yuyan/SettingsOrganizationTest.kt、RimeIntegrationTest.kt、TerminalInputIntegrationTest.kt：开关缓存、系统触感请求、真实分词与编辑、逐像素拖动和英文触摸回归；区分UiAutomation直接参数与ADB Shell引用规则并核对恢复状态",
+        "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本和说明同步"
+      ],
+      "verification": "第一轮4项测试43.993秒通过：设置关闭/重开保留强度、四分位不会关闭、旧关闭状态兼容、系统触感请求不忽略全局设置，yvwo等8种拼音输入的原生边界与编辑及已有拼音编辑回归。最终7项96.962秒全部通过，补充普通/悬浮手柄1至2像素位移、下边界限位后再上移、悬浮拖动条微调，英文补全开/关两种模式中连续一次大写、候选提交、双击CapsLock及解锁后得到ABcDe，并重验气泡真实屏幕点击编辑和宿主焦点。日志tmp_feedback_20261108/tests-feedback-pinyin.log、tests-expanded.log；最终Release版本50403/5.4.3，v1/v2签名、ZIP完整性、16KB ZIP及两项ARM64 ELF对齐通过，覆盖安装成功。正式设置页实际将音量调至23%、触感调至较弱再关闭，滑条保留原位置并变灰；重新启用后恢复，检查后回到跟随系统。截图tmp_feedback_20261108/release-feedback-enabled.png、release-feedback-disabled.png。 区分UiAutomation直接参数与ADB远端Shell引用后，补充2项24.673秒回归通过；最终读回确认默认输入法及启用列表恢复正确，日志tests-cleanup-final.log。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "开关与强度分开持久化；兼容旧备份缺失新键时须动态推导，不能仅在进程启动计算一次默认值。",
+        "全拼原生preedit已有合法边界，不能把字母别名与注释的差异当作分词点。",
+        "精细拖动以手势起点计算累计像素位移，避免逐事件截断小数及固定门槛丢失微调。",
+        "一次大写是逐键语义，候选格式化不能覆盖用户已输入的大小写；Shift双击必须排除中间已经输入字母的情况。",
+        "UiAutomation.executeShellCommand直接解析参数，不能添加Shell引号；ADB shell额外经过远端Shell，含分号的输入法列表必须引用。两种入口的转义规则不同，恢复后应读回核对。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.4.3",
+        "apk": "yuyanSelfOpt_5.4.3_release.apk",
+        "sha256": "bc9b9c73956057e7b385d90446153f1dbf43365c10e3397f02422706c750d56a",
+        "sizeBytes": 52517299,
+        "checks": "版本50403/5.4.3，v1/v2签名、ZIP完整性、16KB ZIP及ARM64 ELF对齐通过；7项模拟器回归、正式页开关缓存与置灰检查通过。",
+        "remotePublished": false
+      }
+    },
+    {
+      "id": "20261106-05",
+      "date": "2026-11-06",
+      "type": "fix",
+      "title": "缩细终端图标并恢复拼音串原版间距，版本5.4.2",
+      "trigger": "用户反馈终端图标相较其他图标仍偏大偏粗，拼音串上下留白过大，要求参照原版调整。",
+      "rootCause": "5.4.1终端框图案覆盖30个视口单位且线宽2.8，视觉偏重；拼音串为补强点击区域将上下内边距从2dp增至4dp并加入28dp最小高度，偏离原版紧凑布局。",
+      "solution": "终端图案边长改为26个视口单位、线宽2，含描边的视觉范围缩小约15%，保持35dp/48视口及统一占位。拼音串恢复原版上下2dp内边距，移除最小高度；保留不抢焦点、真实触摸、显隐与尺寸变化刷新触摸区域及非悬浮顶部圆角。版本递增为5.4.2。",
+      "changedFiles": [
+        "yuyansdk/src/main/res/drawable/ic_menu_terminal.xml：缩小居中图案和线宽",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt：恢复拼音串原版上下留白，移除最小高度",
+        "build.gradle、yuyansdk/README.md、change_log.md、change_details.json：版本和说明同步"
+      ],
+      "verification": "Debug、AndroidTest和Release构建成功。普通/悬浮气泡真实屏幕点击进入编辑、中间插入后raw input为nimhao且宿主保留焦点，既有定向回归25.572秒通过；实际九键输入nihao截图确认紧凑气泡，菜单截图确认终端图标缩细。最终包版本50402/5.4.2，v1/v2签名、ZIP完整性、16KB ZIP和两项ARM64 ELF对齐通过，无内置雾凇，覆盖安装启动成功；手工检查后恢复并核对输入法选择与启用列表。证据：tmp_small_fixes_20261106/tests-5.4.2-composing.log、ui-5.4.2-composing.png、ui-5.4.2-menu-scrolled.png、release-5.4.2-*.log。首轮遇到AGP资源增量内部错误；清理两处资源增量缓存的命令被自动审批以blocked by policy拒绝，未执行删除，改用两个资源任务的--rerun完成构建。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "补强触摸命中应优先修复布局和焦点处理，避免无意扩大既有拼音气泡的视觉留白。",
+        "AGP资源增量合并内部错误可对具体packageResources任务使用--rerun，无需清理整个工程。",
+        "enabled_input_methods可能包含分号分隔的子类型ID；恢复时必须在远端Shell正确引用整个值，并读回核对，避免分号被当作命令分隔符。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.4.2",
+        "apk": "yuyanSelfOpt_5.4.2_release.apk",
+        "sha256": "78500301e4e9791d724188a5fd4d9946ab8b56b99c906f9643a72e702b6a649b",
+        "sizeBytes": 52517291,
+        "checks": "v1/v2签名、ZIP完整性、16KB ZIP和ARM64 ELF对齐通过；版本50402/5.4.2，模拟器真实触摸编辑、紧凑间距与图标观感已核验。",
+        "remotePublished": false
+      }
+    },
+    {
+      "id": "20261106-04",
+      "date": "2026-11-06",
+      "type": "fix",
+      "title": "拼音气泡、设置拆分与分类导出，版本5.4.1",
+      "trigger": "用户暂停Termius组合键诊断，要求修复八项界面、词库进度与备份分类问题。",
+      "rootCause": "前次动态取色将拼音气泡改成统一cornerRadius，丢失非悬浮下方直角；原点击监听仍存在，编辑失效的原始根因未完全确定，本轮补强触摸区域和宿主焦点保护。选中态描边与终端图标风格不一致，词库与同步设置平铺，导出只支持完整包。",
+      "solution": "非悬浮恢复仅顶部圆角，显隐和尺寸变化刷新触摸区域，气泡不抢宿主焦点；删除选中描边，终端改为细线图标。词库、云同步拆成独立页面与状态，按更新方式显示字段，八类同步范围收纳进弹窗。导出独立多选并记忆范围；分类格式3把类别写入受校验数据，导入仅恢复包含类别，完整格式2兼容。源码依赖预先计划，按真实字节显示总进度、完成文件数及当前文件百分比。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt、data/theme/ThemeControls.kt、res/drawable/ic_menu_terminal.xml：气泡形状、触摸与焦点保护、移除描边及图标",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/OtherSettingsFragment.kt、TransferSettingsFragment.kt、CloudSyncSettingsFragment.kt、DataScopeDialog.kt及res/navigation/settings_nav.xml：入口拆分、条件显示和数据多选",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/BackupArchive.kt、LocalDataSnapshot.kt、TransferCoordinator.kt及manager/UserDataManager.kt：分类备份恢复、校验与任务状态隔离",
+        "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/GithubDictionarySource.kt、MobileDictionaryRecipe.kt：下载计划、流式YAML头预读和双进度",
+        "app/src/androidTest/java/com/yuyan/SettingsOrganizationTest.kt、TerminalInputIntegrationTest.kt、TransferIntegrationTest.kt、MobileDictionaryIntegrationTest.kt：实际弹窗、真实气泡触摸、分类恢复与真实源进度断言",
+        "build.gradle、app/build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本、测试导航依赖和说明同步"
+      ],
+      "verification": "调试构建成功；首轮5项核心测试57.683秒通过，包含旧完整备份重复恢复。最后一轮5项15.511秒通过，覆盖词库/云同步条件显隐与实际范围弹窗、非悬浮/悬浮圆角、真实屏幕点击后在拼音中间插入字符且宿主焦点保留、动态取色和按钮蒙版、分类恢复不改其他数据、类别元数据篡改拒绝。另从官方GitHub实际拉取雾凇14个文件、构建测试并启用，106.746秒通过，采集到总进度与当前文件百分比，断言范围合法且总进度不回退。日志：tmp_small_fixes_20261106/tests-core.log、tests-final.log、tests-progress-live.log。最终混淆Release的v1/v2签名、ZIP完整性、16KB ZIP及ELF对齐通过，版本50401/5.4.1，未打包雾凇。正式设置页确认入口拆分、官方模式隐藏无关字段、同步/导出八类弹窗；通过SAF实际导出仅应用设置的ZIP，验证格式3、仅settings范围、无blob且校验正确。首次无任务提示已修正，并在最终包检查词库状态与条件显隐。证据：tmp_small_fixes_20261106/release-layout-*.json、release-dictionary.png、release-sync-scopes.png、release-export-check.json。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "改变背景取色时必须保留非悬浮和悬浮气泡各自的圆角语义；点击编辑应验证屏幕触摸与宿主焦点，不能只调用监听器。",
+        "上游字典YAML头可能包含超过64KB的修订注释；按行流式读取到文档终止符，并设置合理上限。",
+        "分类备份必须声明恢复范围，并将范围纳入数据校验；未包含的类别不能按缺失解释为删除。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.4.1",
+        "apk": "yuyanSelfOpt_5.4.1_release.apk",
+        "sha256": "cf2040fbbeff30d5e1993dc0e7d6fc27f123f3c985b6c7df2db077469610f4f5",
+        "sizeBytes": 52517302,
+        "checks": "v1/v2签名、ZIP完整性、16KB ZIP和两项ARM64 ELF对齐通过；版本50401/5.4.1，无内置雾凇，正式页面和实际分类导出通过。",
+        "remotePublished": false
+      }
+    },
+    {
+      "id": "20261106-03",
+      "date": "2026-11-06",
+      "type": "chore",
+      "title": "真机Termius按键问题排查尚未取得根因",
+      "trigger": "用户报告真机Termius中Alt+Enter无法让Codex换行，并出现输入法左上按钮方形底色。",
+      "rootCause": "未确定。此前Termux通过的验证不覆盖Termius/SSH/Codex链路；尚未取得远端收到的字节，不能判定输入法、终端或Codex哪一层丢失修饰键。",
+      "solution": "只做状态查询、截图和按键对照，未改产品代码或安装软件。经用户确认新标签不通过tmux共享后，退出右侧测试标签的Codex进入Shell。期间Termius自带Alt进入锁定态，已通过第三次点击清除。尝试输入监听命令未取得可见有效结果，随后临时切换到已安装搜狗输入法。",
+      "changedFiles": ["change_log.md、change_details.json：记录未完成的诊断和设备恢复状态"],
+      "verification": "确认语燕5.4.0、Termius7.4.0及Codex0.166.0。输入法Alt选中后按回车，Codex未出现可见换行；尚未采集到有效的按键字节。设备断开ADB后，恢复语燕的命令返回device not found，没有成功执行，已立即告知用户手动恢复输入法并关闭右侧测试标签。左侧原Codex会话未退出，未向Codex提交提示词。",
+      "commits": {"main": "未提交", "yuyansdk": "未提交"},
+      "followUp": "2026-11-09：用户将 Termius 更新到 8.0.1 后 Alt+Enter 恢复正常，输入法侧没有改动，详见 20261109-03。",
+      "lessons": ["不要用其他终端通过的结果推断Termius正常。", "Termius自带Alt有单次、锁定、关闭三态，第二次点击不是关闭。", "未回显的命令不等于未进入输入缓冲，必须先取得可靠键值或回显证据；设备断开后不可声称恢复操作已经完成。"]
+    },
+    {
+      "id": "20261106-02",
+      "date": "2026-11-06",
+      "type": "chore",
+      "title": "补齐真实Termux按键链路验证",
+      "trigger": "用户指出另一台现有Termux可正常运行，并明确要求继续验证。",
+      "rootCause": "此前不可用结论仅适用于独立16KB环境。现有可用环境中的首轮测试又停在宿主EditText未获得焦点的前置条件，不能据此判定终端功能失败。",
+      "solution": "更新5.4.0调试包并运行真实Termux测试。测试跟踪当前恢复的宿主Activity并重新聚焦；确认新增Shell后才发送命令，使用独立历史文件；增加实际编辑键盘上键和回车重复命令，Alt+Enter使用真实按键触摸。清理时只结束测试Shell，不向可能已回到原会话的窗口盲发Enter。",
+      "changedFiles": [
+        "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt：新Shell确认、历史隔离、原会话存活检查、重复命令及真实Alt+Enter触摸、宿主焦点处理和展开偏好恢复",
+        "change_log.md、change_details.json：补充真实终端验证结果"
+      ],
+      "verification": "真实Termux 0.118.3、4KB页面环境下，realTermuxEditingPasteAndStickyInterrupt在27.629秒内通过。断言Alt+Enter到达PTY为ESC加换行（1b 0a或1b 0d），F12为1b 5b 32 34 7e；上键加回车重复追加得到两行repeat；光标编辑、粘贴和Ctrl+C中断后继续输入通过。测试前后原Bash进程保持同一实例，未遗留tmp_yuyan_terminal结果或历史文件，默认输入法和启用列表恢复，剪贴板由finally恢复，界面回到原Shell提示符。日志：tmp_mobile_20261106/tests-termux-live.log；清理后的界面：tmp_mobile_20261106/termux-live-verified.png。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "测试宿主的活动实例与焦点可能在输入法切换后变化，应追踪当前恢复的Activity并重新获取输入框，不能只持有最初startActivitySync返回的引用。",
+        "终端测试必须先确认新增Shell，再发送命令；独立HISTFILE避免污染用户历史。会话结束后不要无条件再发Enter，终端可能已自动返回用户原会话。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.4.0",
+        "apk": "yuyanSelfOpt_5.4.0_release.apk",
+        "sha256": "afe59d3edfe1636065373b4ffe4fbdd3500be1873b2ccf16e2f19a0558f31740",
+        "changed": false,
+        "remotePublished": false
+      }
+    },
+    {
+      "id": "20261106-01",
+      "date": "2026-11-06",
+      "type": "feat",
+      "title": "移动端词库源码构建、恢复默认与终端交互修复，版本5.4.0",
+      "trigger": "用户要求修正照片主题按钮与拼音气泡、终端键序和展开记忆、编辑小键盘回车、Alt组合键、定制工具栏拖动闪退，并在手机端直接从源构建所选词库，新增规则分类同步和损坏后的恢复默认。",
+      "rootCause": "照片菜单固定衬底绕过按键蒙版，透明拼音气泡在浅色宿主上不可读；终端功能行依赖弹出菜单并在结束输入时折叠。排序闪退已取得SQLiteConstraintException堆栈：Room外层UPDATE OR ABORT覆盖触发器INSERT OR REPLACE，selfopt_changes.item重复导致异常。现有更新依赖发布包且验证只检查当前方案是否有候选。",
+      "solution": "统一菜单与按键背景透明度，按实际取景采样左上32dp区域并修正底色对比；终端直接展开并持久化，调整键序和编辑回车，补充外部Alt/Ctrl修饰路径。拖动解绑辅助对象、使用即时位置并将变更触发器改成UPDATE加条件INSERT。新增固定提交的GitHub资源拉取、blob校验、YAML方案适配、独立前台构建进程、临时用户目录逐方案测试、已验证编译缓存启用及失败回退。新增规则导入编辑和第八类同步开关，以及不依赖引擎就绪的恢复内置词库操作。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/：规则、GitHub下载、资源适配、YAML解析及独立构建服务和客户端",
+        "yuyansdk/src/main/java/com/yuyan/inputmethod/EngineRuntime.kt、DictionaryStore.kt：验证后启用编译缓存、恢复内置词库与损坏状态",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/：更新编排、取消和重试状态、规则备份与同步、触发器修复",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/、keyboard/InputView.kt：按钮蒙版与拼音气泡动态取色",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt、utils/KeyboardLoaderUtil.kt：终端键序、展开记忆、退出及编辑回车",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/MenuAdapter.kt、keyboard/container/SettingsContainer.kt：拖动生命周期与位置校验",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/TransferSettingsFragment.kt、OtherSettingsFragment.kt：规则管理、取消、恢复默认和导出说明",
+        "yuyansdk/src/main/AndroidManifest.xml、application/Launcher.kt、build.gradle、proguard.cfg：独立dataSync前台服务、进程初始化隔离、SnakeYAML 2.3及保留其包名",
+        "app/src/androidTest/java/com/yuyan/ThemeLayoutRegressionTest.kt、TerminalInputIntegrationTest.kt、MobileDictionaryIntegrationTest.kt：界面、按键、真实源码构建及恢复回归"
+      ],
+      "verification": "官方Android 15/16KB隔离模拟器通过最终12项回归，覆盖实际拖动两次并重开、真实回车触摸与外部Alt事件、展开记忆、动态采样、蒙版、规则导入、关闭规则同步不应用远端数据及取消构建保留旧版。另完成3项真实词库测试：雾凇官方源拉取构建和逐方案验证后启用约79秒；白霜官方源完整更新通过；损坏词库未启用，状态清单破坏后成功恢复内置白霜并保留用户目录数据。用户随后通过!手动命令成功清理重构并下载安装Termux ARM64；重新核验APK哈希与交付包完全相同，签名、ZIP完整性及16KB对齐通过。该独立16KB环境的ARM64版Termux因libtermux-bootstrap.so加载报empty/missing DT_HASH/DT_GNU_HASH退出，未生成bash，并出现过system_server重启；后续已在另一台可用环境完成真实终端测试，见20261106-02。证据见tmp_mobile_20261106/termux-arm64-crash.log与user-rebuild-signature.log。Release校验见localArtifacts。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "excluded": "用户撤销第8项：不开发手动移动光标后暂停预测，保留既有onUpdateSelection联想逻辑。",
+      "lessons": [
+        "SQLite外层语句的ON CONFLICT策略可能覆盖触发器中的OR REPLACE；使用显式UPDATE与INSERT WHERE NOT EXISTS兼容低版本SQLite，并在数据库打开时替换旧触发器。",
+        "ItemTouchHelper横向换位需越过目标边界；测试只移动到精确中心可能不触发onMove，必须断言真正换位后再检查重开。",
+        "ColorUtils.blendARGB浮点混合可能把255透明度算成254，计算背景对比度前须强制不透明。",
+        "YAML模糊音占位不能按固定缩进文本替换；结构化处理可兼容不同生成器。独立构建环境必须包含default:punctuator，且编译返回成功不代表全部方案可用，仍须测试预期中文候选和提交结果。",
+        "构建进程使用独立用户目录，不能与主引擎共享LevelDB；启动时跳过主进程初始化，取消或原生异常不修改当前词库。",
+        "R8全局repackageclasses会把SnakeYAML TypeDescription移到默认包，导致日志初始化Class.getPackage().getName()空引用；仅保留SnakeYAML包名即可，类与成员继续优化。必须用正式混淆包验证引擎启动和完整更新流程。",
+        "构建状态写入需串行化；跨进程读状态直接读取完整JSON并回退备份，避免旧Android AtomicFile.openRead在另一进程写入期间执行备份恢复。",
+        "执行工具拒绝了额外Termux ARM64测试包下载安装及打包前缓存清理，均仅返回blocked by policy；未绕过拦截，改为保留缓存构建并核验产物。2026-11-06按用户要求再次执行原命令，两项仍在CreateProcess之前被拒绝，没有发生下载、安装或删除；已核对5.4.0交付包SHA256未变，并关闭临时模拟器。用户随后反馈更新及降级版本后继续要求重试，结果仍相同；工具未给出具体规则，不能据此确定版本或配置是否生效。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.4.0",
+        "apk": "yuyanSelfOpt_5.4.0_release.apk",
+        "bytes": 52519890,
+        "sha256": "afe59d3edfe1636065373b4ffe4fbdd3500be1873b2ccf16e2f19a0558f31740",
+        "checks": "最终Release包v1/v2签名、ZIP与16KB对齐通过，版本50400/5.4.0；真实设置入口完成白霜上游拉取、构建、测试与启用，下一次键盘弹出详情，实际按键输入nihao并选词上屏为你好。正式包恢复默认按钮实测成功，状态提示内置白霜和默认规则已恢复。",
+        "manualRetry": "用户手动执行成功，重新构建APK的SHA256与交付包一致；助手状态查询和校验命令正常执行，未据此断言特定命令策略拦截已经解除。随后同时核对两台模拟器：独立16KB环境的Termux引导失败；用户正在查看的另一台现有Termux在前台，bash文件存在且进程运行正常。不能把前一环境的失败概括为全部Termux不可用。",
+        "remotePublished": false
+      }
+    },
+    {
+      "id": "20261105-01",
+      "date": "2026-11-05",
+      "type": "fix",
+      "title": "键盘工具栏边界、自定义主题取景与词库入口，版本5.3.1",
+      "trigger": "调节键盘后工具栏与第一排边界遮挡，照片主题按钮不清晰且明暗选中状态错误；要求按图片中心点适配高度，并整理词库入口与更新失败提示。",
+      "rootCause": "固定工具栏叠加随键盘变化的按键纵向间距，尺寸刷新遗漏候选栏；主题配色isDark被误用为运行明暗模式，同主题赋值不通知；背景使用固定裁剪图拉伸。默认词库源指向尚未发布的频道。",
+      "solution": "工具栏独立测量并同步刷新；保存独立明暗状态并强制通知同主题切换；原图按中心点等比覆盖，保存旋转翻转并兼容EXIF和旧裁剪中心；裁剪工具栏适配系统栏并使用对比配色，照片菜单增加衬底；合并选择入口并将旧失效默认源一次迁移为空。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt、keyboard/InputView.kt：刷新尺寸并消除工具栏动态顶部间距",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/：焦点背景Drawable、受限原图缓存、明暗状态和菜单对比色",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/theme/CustomThemeActivity.kt、libs/cropper/及相关资源：中心点选择、方向持久化、独立工具栏与insets",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/MenuAdapter.kt、CandidatesMenuAdapter.kt、keyboard/SettingsMenuClick.kt：菜单衬底与实际模式选中态",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/、inputmethod/DictionaryStore.kt、data/transfer/TransferCoordinator.kt及导航资源：词库与备份入口、词库选择和无源状态",
+        "app/src/androidTest/java/com/yuyan/ThemeLayoutRegressionTest.kt、RuntimeCompatibilityTest.kt、TerminalInputIntegrationTest.kt：主题、裁剪页、模式、无源与真实键盘调节回归",
+        "build.gradle、README.md、yuyansdk/README.md：版本和现有使用说明"
+      ],
+      "verification": "官方Android 15、16KB模拟器通过7项定向回归；补充菜单实际选中态与更新源一次迁移后，相关5项再次通过。普通/悬浮的英文、九键和数字键盘在最大纵向间距下验证工具栏不裁切、不与首排重叠，调节/重置后仍可输入；裁剪页面截图和设置入口实测通过。最终Release产物校验见localArtifacts。",
+      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "lessons": [
+        "照片主题的isDark表示字色配套，不能替代系统或手动明暗槽位状态。",
+        "更新源迁移只能执行一次，不能持续屏蔽用户随后主动配置的同一URL。",
+        "背景取景必须使用原图坐标与方向；仅保存固定裁剪位图无法在键盘增高时恢复上下内容。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.3.1",
+        "apk": "yuyanSelfOpt_5.3.1_release.apk",
+        "bytes": 52453501,
+        "sha256": "b749e4df4ee312b39e5fe090c2fcb54a8854a972573617c934e397c6c68c2d49",
+        "checks": "Release构建、v1/v2签名、ZIP完整性、ZIP及两项ARM64库的16KB对齐通过；版本50301/5.3.1。安装后设置入口与全拼按键输入nihao、候选选词上屏验证通过。",
+        "environmentNote": "构建并行期间模拟器一次冷启动发生焦点ANR，主线程停在HardwareRenderer.setStopped等待渲染线程的ART JNI回调；停止测试进程后冷启动约2.2秒，设置页与最终Release输入复测正常，未作真机验证。",
+        "remotePublished": false
+      }
+    },
+    {
+      "id": "20261104-05",
+      "date": "2026-11-04",
+      "type": "feat",
+      "title": "按需词库、完整备份与分类WebDAV同步，版本5.3.0",
+      "trigger": "用户要求完成词库在线更新、导出学习记录与基础词库、WebDAV多设备同步；雾凇不再内置；同步频率与冲突策略可配置，七类数据由独立开关决定是否参与云同步。",
+      "rootCause": "旧导出只复制设置、Room文件和外部目录，遗漏新引擎内部学习数据；词库只随APK更新；缺少同步数据版本、删除标记、冲突合并及可靠回退。",
+      "solution": "构建默认只生成白霜，独立发布脚本生成兼容的白霜和雾凇包。手机校验后组合部署，失败重建上一版索引。导出使用带校验清单的v2格式，学习数据走librime文本通道；恢复前保留完整快照，兼容旧备份。WebDAV按类别分开保存版本向量和删除标记，默认保留最新，资源按SHA256去重，通过条件写入解决并发；关闭的类别不读取或写入其远端清单。周期检查按自然日、周、月首次使用触发，后台准备，空闲应用，成功后下次显示详情。 用户选择仅本地交付后，增加独立词库ZIP导入入口；部署或数据应用中断时回退并要求手动重试，阻止低内存环境循环尝试同一失败版本。",
+      "changedFiles": [
+        {
+          "path": "yuyansdk/native/prepare_sources.py、prepare_assets.py、publish_dictionaries.py、dependencies.lock.json；.github/workflows/dictionaries.yml",
+          "notes": "构建跳过雾凇，白霜锁定3ba4f1d、雾凇下载配置锁定99662ba；独立可复现词库包和定时发布工作流。"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/DictionaryStore.kt、EngineRuntime.kt、RimeEngine.kt；native/rime_jni.cpp；core/Rime.kt",
+          "notes": "资源完整性与兼容校验、空闲维护、学习记录导入导出、部署回退、真实学习修改时间。"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/；manager/UserDataManager.kt；database/DataBaseKT.kt",
+          "notes": "完整备份、逻辑恢复、崩溃恢复快照、分项版本与删除传播、七类云端隔离、WebDAV条件写入和频率触发。"
+        },
+        {
+          "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/TransferSettingsFragment.kt、InputSettingsFragment.kt、OtherSettingsFragment.kt；service/ImeService.kt；application/Launcher.kt；speech/SpeechCredentials.kt；res/navigation/settings_nav.xml",
+          "notes": "配置、范围开关、冲突处理、导入预览、更新详情、状态和凭据保护。"
+        },
+        {
+          "path": "app/src/androidTest/java/com/yuyan/TransferIntegrationTest.kt、SyncDeviceScenarioTest.kt、RimeIntegrationTest.kt；app/build.gradle",
+          "notes": "完整备份、可选词库、坏包回退、旧格式、恢复中断、真实WebDAV和关闭类别的隔离测试；两台设备交替执行的真实同步场景。"
+        },
+        {
+          "path": "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json",
+          "notes": "版本5.3.0及最小文档同步。"
+        }
+      ],
+      "verification": "Debug、测试APK和R8压缩Release构建通过。分轮通过10项传输回归和13项Rime输入回归，另完成真实坚果云条件写入、连续同步、七类开关隔离及两设备修改和删除传播验证。本地词库导入、部署中断后阻止同版本自动重试补测通过；更新详情弹窗验证只出现一次。主要测试使用官方Android 15、16KB模拟器；3GB配置曾被低内存管理终止，扩大测试内存后补测通过；第三方ARM转换环境初始化超时，未计入通过，未进行真机验证。最终Release为5.3.0/50300，v1/v2签名、ZIP完整性、16KB ZIP和ELF对齐通过。APK为52436863字节，SHA256=c415f7f30aa84b40cb4ea260d812f3584d5d7d4e8734ccec5706c084c52c0cea；内置白霜36332018字节，未包含雾凇和测试凭据。按用户要求只保留本地代码与安装包，不提交、推送或发布；独立词库包可本地导入，默认在线频道未发布。",
+      "commits": {
+        "main": "未提交（按用户要求）",
+        "yuyansdk": "未提交（按用户要求）"
+      },
+      "lessons": [
+        "坚果云GET返回未加引号的ETag，仍支持If-Match并拒绝过期写入；HEAD可能返回0长度，资源去重应使用PROPFIND/getcontentlength。",
+        "多设备冲突必须保留版本向量与删除记录，关闭类别不能生成删除标记，也不能把全部数据合入同一个云端清单。",
+        "导出或同步快照后不应无条件重新部署所有方案；恢复失败必须清除受损编译产物并重建上一版。",
+        "Android增量APK可能保留废弃ZIP块，最终交付需重新打包并核对实际包体。",
+        "首次同步的默认值使用基线时间，避免新设备默认设置覆盖旧设备的自定义内容。",
+        "大词库部署的峰值内存高于下载包体积；应用阶段被系统终止后应回退并阻断自动重复应用，不能无限重试。"
+      ],
+      "localArtifacts": {
+        "directory": "build/deliverables/5.3.0",
+        "apk": "yuyanSelfOpt_5.3.0_release.apk",
+        "sha256": "c415f7f30aa84b40cb4ea260d812f3584d5d7d4e8734ccec5706c084c52c0cea",
+        "remotePublished": false
+      }
+    },
     {
       "id": "20261104-04",
       "date": "2026-11-04",
@@ -2150,7 +2536,7 @@
         "entry": "yuyansdk/native/build_native.py（Gradle preBuild 自动调用）",
         "sources": "yuyansdk/native/.cache；依赖版本和 SHA256 见 dependencies.lock.json",
         "requirements": "Python 3.12、PyYAML 6.0.3、NDK 28.2.13676358、CMake 3.31.6",
-        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_5.2.3_release.apk",
+        "outputs": "yuyansdk/build/generated/rime/jniLibs 与 assets；Release APK 为 app/build/outputs/apk/offline/release/yuyanSelfOpt_<versionName>_release.apk",
         "compatibility": "Rime 与 ML Kit 19.0.0 的 ARM64 原生库均满足 16 KB ELF/RELRO 要求，最终 Debug/Release APK 的 ZIP 对齐及 Release AAB 的 PAGE_ALIGNMENT_16K 已通过检查；实际 16 KB 运行验证见最新 entries"
       },
       "os": "Windows，终端使用 PowerShell",
@@ -2198,6 +2584,99 @@
     }
     },
     "codeMap": [
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/ImeInlineEditor.kt", "role": "键盘内单行原文输入条（花漾字处理栏与剪贴板搜索共用）", "notes": "包含 ImeSourceEditText 与清空按钮，显式开启 focusable/focusableInTouchMode 以便本地焦点和光标；清空按钮随文本自动显隐；applyTheme 提供圆角底框和 activated 加深边框，由调用方在焦点变化时设置 isActivated。" },
+      { "path": "yuyansdk/src/main/res/layout/sdk_skb_container.xml", "role": "输入法根布局：holder、候选栏、辅助面板与键盘区", "notes": "ll_input_keyboard_container 靠 gravity=center_horizontal 居中其内容；其中 keyboard_flower_panel 与 keyboard_auxiliary_panel 为 match_parent，会让内容整体撑满而使居中失效，所以键盘区宽度要与 inputAreaWidth 一致（横屏已铺满），不要再依赖该 gravity 居中。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/ClipboardSearchPanel.kt", "role": "键盘内临时搜索编辑栏", "notes": "ImeSourceEditText与BaseInputConnection保持独立编辑目标，提供搜索/取消；onCheckIsTextEditor=false避免注册第二个系统编辑器，关闭清理组合态。5.5.0 改用 ImeInlineEditor（与花漾字同款底框、光标、清空），行高取 heightForCandidatesArea；旧版搜索框未显式设置可在触摸模式获得焦点，requestFocus 失败导致不显示光标。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/ClipBoardContainer.kt", "role": "剪贴板及常用语列表和搜索筛选", "notes": "固定搜索行与有界列表，关键词按内容忽略大小写匹配，保留DAO置顶/时间顺序；清除/空结果和删除刷新共享同一展示集合，搜索条件仅在内存保留。搜索入口在工具栏（openSearch），容器只在有条件时显示 32dp 细栏（clipboard_search_label/clear）；右下角 clipboard_floating_enter 走 inputView.responseKeyEvent(SoftKey(ENTER))，与键盘回车同路径，终端模式下会发送到终端；列表底部留出按钮高度的 padding。按类型切换容器不会刷新工具栏，筛选变化后需手动 updateCandidateBar。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/ClipBoardAdapter.kt", "role": "剪贴板和常用语条目呈现", "notes": "List/Grid/Flex共用条目，文本起始对齐并预留置顶图标空间；使用clipboardTextSize，保留原内容与换行提示。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/VoiceInputPanel.kt", "role": "语音状态、预览和取消界面", "notes": "固定外部范围内按权重分配预览区；取消按钮及面板向上48dp手势共用回调，横向滑动不取消，主题变更随附着注册/移除。不再有连接中状态；cancelArmed 显示「松开取消」并淡化预览。自身手势与空格长按共用 VOICE_CANCEL_DP=48、VOICE_RESUME_DP=32 的回差阈值，松手时仍处于提示状态才调用 onCancel。构造参数 onCancelArmed 在 onCancel 之前，保证 VoiceInputPanel(ctx) { } 的尾随 lambda 仍绑定取消回调。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/database/dao/ClipboardDao.kt", "role": "剪贴板逻辑记录查询与清理", "notes": "读取按isKeep/time降序，按完整内容删除，自动清理保留置顶；搜索在容器内过滤，数据库接口保持兼容。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/ManagedPreferenceInternal.kt", "role": "内部偏好创建与注册", "notes": "提供bool/int等托管偏好工厂；构造参数sharedPreferences为父类私有，AppPrefs.Internal自定义getter应显式引用外层AppPrefs.sharedPreferences。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/preference/ManagedPreference.kt", "role": "托管偏好的读写与监听包装", "notes": "PBool/PInt写入SharedPreferences，缺失键返回默认；弱监听必须保留实例引用。历史键兼容规则可在AppPrefs有效状态getter中动态推导。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/BaseContainer.kt", "role": "键盘容器及高度/位置调整遮罩", "notes": "高度手柄保留当前调整规则；普通及悬浮移动手柄以手势起点计算1像素纵向位移，松手持久化，边界使用扣除位置padding后的键盘高度。；悬浮拖动上限改取 InputView.floatKeyboardOffsetLimits()（未受挤压的自然尺寸），与 InputView 内的同名逻辑保持一致，修改一处须同步另一处。" },
+      { "path": "yuyansdk/src/main/res/drawable/ic_menu_terminal.xml", "role": "菜单及工具栏终端图标", "notes": "35dp尺寸、48视口与其他菜单一致；图案居中在11至37，线宽2，圆角线端，避免外框视觉过重。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/CloudSyncSettingsFragment.kt", "role": "WebDAV云同步设置页", "notes": "独立同步状态、连接配置、频率、冲突与恢复操作；参与同步的数据通过单个入口多选，确定时批量保存原范围键。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/DataScopeDialog.kt", "role": "八类数据多选弹窗", "notes": "云同步与导出复用选择界面但分别持久化；取消不改动，支持全选/全不选，导出必须至少选择一类。" },
+      { "path": "app/src/androidTest/java/com/yuyan/SettingsOrganizationTest.kt", "role": "设置组织、反馈开关与弹窗集成回归", "notes": "验证词库、云同步拆分和规则显隐、实际范围弹窗；按键效果覆盖旧关闭值、独立开关缓存、重开页面、四分位不关闭和系统触感请求无忽略标记。" },
+      { "path": "yuyansdk/proguard.cfg", "role": "SDK传递给应用的必要混淆规则", "notes": "SnakeYAML TypeDescription的静态日志初始化依赖非空包名，保留org.yaml.snakeyaml及子包的包名即可，不全量保留类成员。YAML限定SafeConstructor和BeanAccess.FIELD，Android缺少的五项JavaBeans类型属于未使用路径。JNI及Preference/ViewHolder反射字段规则保留。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ComposingBackgroundSampler.kt", "role": "拼音气泡取色与对比修正", "notes": "按背景实际bounds、padding及焦点变换绘制16x16样本，平均左上32dp区域；沿用按键字色并调整不透明底色到4.5:1，InputView按背景与尺寸缓存。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/DictionaryRules.kt", "role": "内置、手动及网络词库规则与同步记录", "notes": "声明式GitHub规则限定frost/ice，保存每项时间和模式/选择，rule/记录独立同步；默认内置官方规则，恢复默认保留最新修改时间，兼容包索引仍支持。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/GithubDictionarySource.kt", "role": "固定上游提交的资源下载", "notes": "GitHub提交及树元数据固定同一SHA，校验长度与Git blob SHA1；按计划文件总字节与实际read报告总/当前百分比，完成文件不重复计数。YAML头以约1MB范围流式读取到终止符，兼容长注释；不拉取另一词库仓库。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/MobileDictionaryRecipe.kt", "role": "手机端词库资源适配", "notes": "从本机白霜模板生成九种中文方案，递归重写import_tables并检查循环，构建前计划完整依赖及方案、许可证文件；白霜更新公共Lua/OpenCC/英文/笔画/预测资源，雾凇仅生成自己的词库与方案。VERSION和ruleHash用于识别适配版本。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/DictionaryYaml.kt", "role": "受限YAML解析与模糊音模板渲染", "notes": "SnakeYAML SafeConstructor限定文档大小、别名数量和重复键；结构化替换speller.algebra中的单一模糊音占位，输出BLOCK风格。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/DictionaryBuildService.kt", "role": "独立词库构建进程", "notes": "私有:dictbuild进程使用dataSync前台通知，提供取消与系统超时处理；临时目录编译并验证每个方案的候选、选择提交和清空，测试完成后才保存可启用结果。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/DictionaryBuildClient.kt", "role": "构建任务编排与中断检测", "notes": "通过私有UUID任务目录和AtomicFile传递状态，绑定服务监测崩溃，保留任务ID以恢复中断；已完成且请求一致时复用结果，清理不再使用的大型中间目录。" },
+      { "path": "app/src/androidTest/java/com/yuyan/MobileDictionaryIntegrationTest.kt", "role": "真实移动端词库与恢复测试", "notes": "liveDictionarySource=true显式启用官方网络测试；验证源构建期间旧词库不变、仅更新所选项、坏包拦截、损坏清单恢复、规则开关隔离和取消构建；采集总/当前文件百分比并验证范围和总进度单调。" },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/cropper/CropImageView.kt",
+        "role": "图片旋转、翻转与裁剪视图",
+        "notes": "异步原图加载会应用EXIF方向，宿主应在完成回调恢复已保存的显式方向；CropResult新增翻转字段，View公开当前翻转状态供结果封装。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/cropper/CropImage.kt",
+        "role": "裁剪结果Parcelable通道",
+        "notes": "ActivityResult构造与Parcel读写必须同步维护旋转、水平翻转和垂直翻转，避免保存后的背景与选择页方向不一致。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/cropper/CropImageOptions.kt",
+        "role": "裁剪器选项",
+        "notes": "initialRotation默认-1表示沿用EXIF，0为显式不旋转；cropperLabelTextSize单位是像素。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/cropper/CropImageContract.kt",
+        "role": "图片选择活动结果契约",
+        "notes": "通过Bundle传入原图URI及CropImageOptions，解析CropImage.ActivityResult；取消统一返回CancelledResult。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/OtherSettingsFragment.kt",
+        "role": "词库与备份设置页",
+        "notes": "保留隐藏图标、导出与导入；词库、云同步分别进入。导出弹窗独立选择八类数据并记忆，导入预览所含类别，未包含类别保留。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ManagedThemePreference.kt",
+        "role": "按名称持久化主题偏好",
+        "notes": "同名主题写入不一定触发SharedPreferences通知；运行模式变化不能依赖主题名称变化通知。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/ManagedPreferenceCategory.kt",
+        "role": "偏好分组与UI创建基础类",
+        "notes": "已定义protected sharedPreferences，子类构造参数不可重复定义同名属性。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/FocalBackgroundDrawable.kt",
+        "role": "自定义照片背景的中心点等比取景",
+        "notes": "按原图焦点、旋转翻转和当前bounds生成cover矩阵，边缘限位无留白；作为View背景时排除位置调节padding，不按宽高分别拉伸。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ThemeControls.kt",
+        "role": "照片菜单按钮的对比衬底和前景",
+        "notes": "菜单和工具栏背景共用keyBackgroundColor及accentKeyBackgroundColor，保留蒙版alpha与配套字色，选中态不额外描边；拼音气泡的对比修正在独立采样器中完成。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ThemeManager.kt",
+        "role": "主题与运行明暗状态管理",
+        "notes": "isNightMode独立于主题isDark；同主题双槽位切换仍通知。真实系统模式变化清除临时覆盖，关闭跟随时持久化manualNightMode。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ThemePrefs.kt",
+        "role": "主题、槽位与键盘外观偏好",
+        "notes": "manualNightMode为内部可空偏好，兼容旧数据时回退到normalModeTheme.isDark。SharedPreferences来自父类，勿重复声明同名属性。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ThemeBackgroundCache.kt",
+        "role": "受限原图解码与EXIF方向读取",
+        "notes": "最长边4096且不超过8M像素，inSampleSize从1开始；保留ARGB透明度，主题改写或删除时原图与裁剪图缓存均须失效。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/libs/cropper/CropImageActivity.kt",
+        "role": "中心点选择所用图片裁剪界面",
+        "notes": "独立Toolbar与系统栏insets；图片异步加载后恢复显式rotation及flip，initialRotation=0也有效。CropImage.ActivityResult的Parcel同步保留旋转翻转。"
+      },
+      {
+        "path": "app/src/androidTest/java/com/yuyan/ThemeLayoutRegressionTest.kt",
+        "role": "照片主题与词库源回归",
+        "notes": "实际矩阵验证等比扩展和边缘覆盖、同主题双槽位及菜单选中态、4.5:1对比度、裁剪页工具栏与方向恢复、空源无网络调度及一次迁移。"
+      },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingSession.kt",
         "role": "按字隔离的手写输入状态",
@@ -2211,12 +2690,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/Theme.kt",
         "role": "内置和自定义主题的颜色与图片配置",
-        "notes": "自定义键帽蒙版复用keyBackgroundColor、functionKeyBackgroundColor、accentKeyBackgroundColor的alpha，keyBackgroundOpacity为不序列化的计算属性。旧主题各字段原值保持不变，只有用户调节才统一alpha。"
+        "notes": "自定义键帽蒙版复用keyBackgroundColor、functionKeyBackgroundColor、accentKeyBackgroundColor的alpha，keyBackgroundOpacity为不序列化的计算属性。旧主题各字段原值保持不变，只有用户调节才统一alpha。CustomBackground优先读取原图，旧cropRect只取中心点，缺原图时回退裁剪图；新增可空rotation及翻转字段。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/theme/CustomThemeActivity.kt",
         "role": "自定义主题编辑、图片明暗及按键背景蒙版调节",
-        "notes": "蒙版与图片明暗独立；深浅按键切换保留各类键帽alpha。初始化滑块不触发写入，用户拖动仅更新颜色与预览，保存由既有Activity结果通道交给ThemeManager。"
+        "notes": "蒙版与图片明暗独立；深浅按键切换保留各类键帽alpha。初始化滑块不触发写入，用户拖动仅更新颜色与预览，保存由既有Activity结果通道交给ThemeManager。图片选择保存原图与中心坐标，预览使用FocalBackgroundDrawable，裁剪图只作兼容回退。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardPreviewView.kt",
@@ -2246,7 +2725,7 @@
       {
         "path": "app/src/androidTest/java/com/yuyan/TerminalInputIntegrationTest.kt",
         "role": "终端发送、中文方案保留及转换面板的 Android 回归",
-        "notes": "真实 IME 验证持续花漾字、空取消、宿主原始输入、输入重启、剪贴板位置锁定、图标状态及所有中文方案保留。符号修饰和 Alt+Enter 检查标准事件；termuxUiTest=true 在独立 Termux 会话校验真实命令输出与原始按键字节，结束恢复配置和剪贴板。"
+        "notes": "真实IME验证拼音气泡非悬浮/悬浮圆角、实际屏幕点按后中间插入字符且宿主保留焦点，以及持续花漾字、取消、输入重启和所有中文方案。 补充普通/悬浮移动手柄与浮动拖动条的1像素位移、下边界再移动，以及英文补全开关两种模式的逐键大小写、候选提交和CapsLock。符号修饰和Alt+Enter检查标准事件；termuxUiTest=true在独立Termux会话校验真实命令输出与原始字节，结束恢复配置和剪贴板。 剪贴板覆盖中英文搜索、本地编辑、宿主隔离、输入重启保持、筛选精确粘贴、清除/空结果/取消，并可截取安全测试数据界面。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/InputViewParent.kt",
@@ -2301,12 +2780,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/KeyboardAuxiliaryPanel.kt",
         "role": "通用键盘顶部快捷键与转换原文面板",
-        "notes": "花漾字处理栏位于候选栏上方，终端行独立位于下方；启用后持续显示，完成清空并继续聚焦，空取消关闭模式。WATCH_OUTSIDE_TOUCH 区分宿主原始输入，内部 Popup/ActionMode 用计数保护。处理意图与活动会话分离，连接重建保留意图；本地 BaseInputConnection 始终不触发系统重绑定。 终端顶栏 TAB 在 ESC 前；扩展区 F(n) 保存原容器并临时显示数字视图，编号独立于宿主文本，支持1到12、退格、确认和取消，替代 INS 与固定功能键行。 扩展区仅保留单行功能键，按内容计算高度，不显示额外符号行。"
+        "notes": "花漾字处理栏位于候选栏上方，终端行独立位于下方；启用后持续显示，完成清空并继续聚焦，空取消关闭模式。WATCH_OUTSIDE_TOUCH 区分宿主原始输入，内部 Popup/ActionMode 用计数保护。处理意图与活动会话分离，连接重建保留意图；本地 BaseInputConnection 始终不触发系统重绑定。 终端顶栏 ESC 在 TAB 前；更多直接切换展开并以terminal_functions_expanded记忆，扩展行末为退出，Ctrl快捷顺序Z/C/L；扩展区 F(n) 保存原容器并临时显示数字视图，编号独立于宿主文本，支持1到12、退格、确认和取消，替代 INS 与固定功能键行。 扩展区仅保留单行功能键，按内容计算高度，不显示额外符号行。终端按键（terminalKeys）行高与间距不再固定 dp：在 onMeasure 中取 skbHeight/4 扣 keyYMargin（Google 风格 QWERTY 乘1.5）与 keyXMargin，与普通按键一致；因测量缓存，键盘高度变化时需由 InputView.updateKeyboardSize 显式 requestLayout。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/CandidatesBar.kt",
         "role": "候选词和工具栏菜单显示与点击分发",
-        "notes": "showCandidates 根据容器和候选状态刷新菜单，剪贴板页使用 candidateToolbarItems 保留按钮原位、删除第一及锁定第二；删除确认菜单上报可见状态，避免误判为宿主点击。"
+        "notes": "showCandidates 根据容器和候选状态刷新菜单，剪贴板页使用 candidateToolbarItems 保留按钮原位、删除第一及锁定第二；删除确认菜单上报可见状态，避免误判为宿主点击。固定栏高不使用动态keyYMargin作为padding，尺寸变更须refreshDimensions。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/popup/PopupPreset.kt",
@@ -2326,12 +2805,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/InputFeedbacks.kt",
         "role": "系统按键音与振动反馈",
-        "notes": "按键音使用 AudioManager.playSoundEffect；偏好小于 5 跟随系统、5 至 9 关闭、10 及以上映射音量参数，没有主动选择通知音频流。响度仍受系统音效和静音策略影响"
+        "notes": "先检查独立开关；关闭直接返回，强度不再承担关闭功能。跟随系统调用playSoundEffect单参数重载、performHapticFeedback不带忽略标记；声音11至40映射30档自定义音量，触感2至4为5/30/50ms。未选择通知音频流，系统策略仍决定实际响度。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/KeyboardFeedbacksFragment.kt",
         "role": "按键音和振动开关及强度设置",
-        "notes": "声音滑块范围 0 至 40，写入 InputFeedbacks 读取的同一 soundOnKeyPress 偏好；偏好底层名称沿用历史键，不应仅因命名与振动相反就直接改名"
+        "notes": "声音滑条0至30、触感0至3，最左为跟随系统，其余映射历史有效强度值；独立布尔开关关闭时缓存thumb当前位置并禁用、置灰，重开恢复。缺少新键时兼容旧关闭哨兵；底层历史强度键名不重命名。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/utils/DevicesUtils.kt",
@@ -2351,12 +2830,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/container/SettingsContainer.kt",
         "role": "键盘内部菜单网格及拖动排序",
-        "notes": "RecyclerView 菜单由数据库和预设映射生成，按键盘宽度确定列数；菜单可滚动，设置入口不一定在第一屏。isKeyboardSelectionVisible 区分布局选择页和普通菜单，showSettingsView 必须重置该状态。"
+        "notes": "RecyclerView 菜单由数据库和预设映射生成，按键盘宽度确定列数；菜单可滚动，设置入口不一定在第一屏。isKeyboardSelectionVisible 区分布局选择页和普通菜单，showSettingsView 必须重置该状态。拖动辅助对象应在退出定制和容器分离时解绑，位置读取bindingAdapterPosition并检查有效性，换位后保存顺序及失效菜单缓存。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/SkbFunData.kt",
         "role": "键盘菜单文字、图标和操作类型预设",
-        "notes": "菜单预设使用 Android drawable；candidateToolbarItems 按横向 reverseLayout 返回数据，保留剪贴板右侧固定项，视觉从左到右为删除、锁定、常用语、剪贴板。"
+        "notes": "菜单预设使用 Android drawable；candidateToolbarItems 按横向 reverseLayout 返回数据，保留剪贴板右侧固定项，视觉从左到右为删除、锁定、常用语、剪贴板。工具栏 RecyclerView 为反向布局，列表越靠后显示越靠左；ClipboardSearch 追加在删除（常用语页为添加）之后，因此显示在其左侧。ClipboardSearch 不在数据库菜单里，不会出现在「更多」网格。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/DecodingInfo.kt",
@@ -2366,7 +2845,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/manager/InputModeSwitcher.kt",
         "role": "输入语言、键盘布局和编辑器动作切换",
-        "notes": "中文全键模式为 0x1010；input_method_pinyin_mode 与 input_method_pinyin_mode_rime 分别保存布局和逻辑方案。isTerminalMode 独立保存进入前模式和最近语言模式，英文直输不更改中文方案，终端期间不覆盖 inputDefaultMode；退出恢复原模式；用户主动更换中文布局时按当前中文偏好恢复，保持布局与方案一致。回车动作由 EditorInfo 推导，但有候选时 InputView 优先提交组合串。"
+        "notes": "中文全键模式为 0x1010；input_method_pinyin_mode 与 input_method_pinyin_mode_rime 分别保存布局和逻辑方案。isTerminalMode 独立保存进入前模式和最近语言模式，英文直输不更改中文方案，终端期间不覆盖 inputDefaultMode；退出恢复原模式；用户主动更换中文布局时按当前中文偏好恢复，保持布局与方案一致。回车动作由 EditorInfo 推导，但有候选时 InputView 优先提交组合串。Shift使用单调时钟，只有当前一次大写且连续点击才锁定，输入后清除双击计时。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/candidate/FloatCandidateBar.kt",
@@ -2376,12 +2855,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/TextKeyboard.kt",
         "role": "软键盘按键显示、回车状态及点击反馈",
-        "notes": "回车键图标跟随 InputModeSwitcher 的编辑器动作更新；实际点击经 InputView 处理，图标不决定有组合文本时是否应触发宿主动作"
+        "notes": "回车键图标跟随 InputModeSwitcher 的编辑器动作更新；实际点击经 InputView 处理，图标不决定有组合文本时是否应触发宿主动作 剪贴板搜索期间回车显示搜索动作。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/QwertyPinYinUtils.kt",
         "role": "全拼组合串与候选读音的展示转换",
-        "notes": "候选 comment 为空时直接返回原组合串；有读音时按分词符逐段对齐。无原生候选时 RimeEngine 直接展示原组合串，无需此转换"
+        "notes": "按候选注释逐段对齐的兼容显示转换；5.4.3全拼已改为直接展示原生preedit，避免v/u别名被公共前缀算法插入额外分词，其他兼容方案保留原路径。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/CommonUtils.kt",
@@ -2396,12 +2875,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/AppPrefs.kt",
         "role": "应用偏好定义与默认值",
-        "notes": "full_display_keyboard_enable 默认 false，仅表示额外快捷栏；保持原偏好键，SharedPreferences 中已有 true/false 值优先，不强制覆盖已有选择 输入设置新增数字输入分类，number_keyboard_compatible_input默认true，关闭时保留数字按键事件。"
+        "notes": "full_display_keyboard_enable默认false，仅表示额外快捷栏；数字兼容默认true。声音/触感使用独立soundEnabled/vibrationEnabled开关，强度保留历史反向命名键；isSoundEnabled/isVibrationEnabled动态处理旧备份缺少新键的情况，复制设备保护存储时写入有效状态。clipboard_floating_enter（默认开启）控制剪贴板悬浮回车键，设置页由 Clipboard 分类自动生成。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/singleton/EnvironmentSingleton.kt",
         "role": "键盘几何参数与弹窗定位基准",
-        "notes": "systemNavbarWindowsBottom 来自系统 Insets；横屏不计入未显示的快捷栏最小高度，悬浮模式只保留拖动条高度"
+        "notes": "systemNavbarWindowsBottom 来自系统 Insets；横屏不计入未显示的快捷栏最小高度，悬浮模式只保留拖动条高度；悬浮模式用 floatMaxAreaHeight（由 InputView 测得的窗口内容区高度）把按键区高度夹到总高度不超过窗口，下限为原高度一半；横屏普通键盘 skbWidth 即屏幕宽度，不再缩为70%。悬浮高度基准 max(宽,高)×3/4 与竖屏高度比例共用。"
       },
       {
         "path": "build.gradle、gradle/wrapper/gradle-wrapper.properties",
@@ -2551,12 +3030,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
         "role": "输入法服务、编辑器和语音会话生命周期",
-        "notes": "activeInputConnection 将花漾字原文路由到本地连接，普通输入直接提交原文；宿主预览使用会话捕获的目标连接。监视窗口外部触摸切换原始输入；输入重启根据处理意图和路由修订恢复处理栏，避免覆盖用户原始输入选择。输入会话边界取消语音及旧转换。"
+        "notes": "activeInputConnection 将花漾字原文路由到本地连接，普通输入直接提交原文；宿主预览使用会话捕获的目标连接。监视窗口外部触摸切换原始输入；输入重启根据处理意图和路由修订恢复处理栏，避免覆盖用户原始输入选择。输入会话边界取消语音及旧转换。 同一输入目标重启时保留剪贴板搜索，避免清理本地连接或重启花漾字路由。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
         "role": "软键盘主视图，承载候选栏、键盘容器与弹窗，同时是按键事件的业务处理入口",
-        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存 手写走组合文本：handwritingComposing 非空表示输入框中有未落定的字，此时 chooseAndUpdate、空格、回车、退格、onUpdateSelection 均有专门分支。默认保留系统输入法导航栏，以 navigationBars/captionBar 联合 Insets 预留底部安全区；额外栏使用 padding，悬浮模式保留拖动条高度，导航图标明暗随主题更新。；语音动作转发给 ImeService；普通按键输入前取消待返回的语音会话。 F(n) 编号在候选提交和终端修饰键路由之前处理，文本、上滑数字及物理数字统一隔离，宿主触摸和菜单切换取消临时输入。 commitExternalText 为剪贴板条目和语音共用路径；数字键盘兼容偏好默认文本提交，关闭沿用事件；圆角轮廓须在initView前初始化。"
+        "notes": "processKeyDown 仅决定『是否消费该按键的 DOWN』，processKeyUp 才做实际输入处理，两者的判定范围必须匹配。系统按键（event.isSystem，含 BACK/HOME/音量等）一律返回 false 交由 InputMethodService 基类处理，切勿在此拦截返回键。responseKeyEvent 会构造合成 KeyEvent 复用 processKeyUp 处理软键盘点击。updateTheme 中对背景图做全尺寸 Bitmap.scale 且无缓存 手写走组合文本：handwritingComposing 非空表示输入框中有未落定的字，此时 chooseAndUpdate、空格、回车、退格、onUpdateSelection 均有专门分支。默认保留系统输入法导航栏，以 navigationBars/captionBar 联合 Insets 预留底部安全区；额外栏使用 padding，悬浮模式保留拖动条高度，导航图标明暗随主题更新。；语音动作转发给 ImeService；普通按键输入前取消待返回的语音会话。 F(n) 编号在候选提交和终端修饰键路由之前处理，文本、上滑数字及物理数字统一隔离，宿主触摸和菜单切换取消临时输入。 commitExternalText 为剪贴板条目和语音共用路径；数字键盘兼容偏好默认文本提交，关闭沿用事件；圆角轮廓须在initView前初始化。 拼音气泡上下内边距沿用原版2dp且无最小高度，非悬浮仅顶部圆角，悬浮四角圆；采样缓存包含模式，显隐与尺寸变化请求decor布局，不获取焦点以保留宿主编辑。悬浮拖动条按手势起点累计纵向像素位移，边界排除位置padding，松手保存。 剪贴板搜索拥有优先本地输入连接；搜索时挂起花漾字/终端快捷键，ENTER提交搜索；同目标重启保留语言，退出先取消语音与组合态，再恢复原输入路由。悬浮边距上限用 floatKeyboardOffsetLimits() 测量 mSkbRoot 的自然尺寸（UNSPECIFIED 高度），不能用已被挤压的当前高度；onFloatWindowLayout 仅在键盘顶到窗口顶部或窗口高度变化时才触发夹紧/重算，避免每次布局都测量。夹紧只作用于视图边距，不落盘，松手才保存。悬浮时 applyWindowFitting 把窗口 fitInsetsTypes 收窄为仅导航栏，否则 decor 会再垫一次状态栏高度的顶部内边距，使键盘到不了窗口顶部（已在 5.5.0 真机验证）。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyboardManager.kt",
@@ -2616,7 +3095,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/RimeEngine.kt",
         "role": "Rime 引擎的业务封装，负责按键下发、候选装配、拼音串改写与候选下标映射",
-        "notes": "维护候选下标、按键栈和拼音编辑，入口同步保护。模糊音已进入方案 algebra，不再重放额外输入；注音的空格归一为分词符；中文混输保留英文大小写；联想按展示下标提交。无匹配且组合串非空时补充原文候选，以 RAW_INPUT_CANDIDATE 标记映射，选中后直接提交并重置。"
+        "notes": "维护候选下标、按键栈和拼音编辑，入口同步保护；全拼直接沿用原生preedit。英文候选、翻页和提交按rawInput逐字套用实际大小写，补全后缀按CapsLock状态处理。模糊音在algebra中完成；原文候选使用RAW_INPUT_CANDIDATE映射。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/util/FuzzyPinYinUtils.kt",
@@ -2671,12 +3150,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/DoubaoSpeechProvider.kt",
         "role": "豆包流式识别与参数适配",
-        "notes": "新式 X-Api-Key，默认 2.0 小时版和二遍识别；全量结果，保留分句、说话人及原始附加信息，自动补全参数依赖并限制发送队列。"
+        "notes": "新式 X-Api-Key，默认 2.0 小时版和二遍识别；全量结果，保留分句、说话人及原始附加信息，自动补全参数依赖并限制发送队列。发送队列上限为 1 MB（MAX_QUEUE_BYTES），以容纳连接就绪时一次补发的暂存录音。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/VoiceInputController.kt",
         "role": "输入法录音、预览和最终提交生命周期",
-        "notes": "连接/最终结果超时 15 秒，录音最长 60 秒；录音在工作线程，代次及 InputConnection 阻止过期上屏，音频不落盘。 最终文本回调至InputView统一入口；最近非空识别文本仅在本次会话缓存，取消清空；面板宽度固定为原root.width，不使用MATCH_PARENT。"
+        "notes": "连接/最终结果超时15秒，录音最长60秒；工作线程录音，代次及InputConnection隔离旧会话。最终结果松开后才提交，取消不刷新剩余音频；浮层根据已测量内容宽高减边距固定，避免MATCH_PARENT撑宽。 浮层挂载到外层InputView，以键盘内容节点为锚点，独立于键盘测量并高于准备提示层。5.5.0 起按下即录音：AudioUplink 在 onReady 前按顺序暂存 PCM（上限 20 秒），就绪后在主线程连续补发，finish 请求也延后到补发之后；setCancelArmed 期间录音不停、改发等长静音帧保持会话。面板高度由 start(coverBottom) 给出的空格行顶部（窗口坐标）截止，传入 -1 时覆盖整个键盘。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/VoiceSettingsFragment.kt",
@@ -2686,7 +3165,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/BaseKeyboardView.kt",
         "role": "软键盘触摸、长按及滑动处理",
-        "notes": "空格长按优先开始语音，UP 结束、CANCEL 取消且不补空格；长按前触发的空格滑动仍移除长按消息，保留光标移动。"
+        "notes": "空格长按启动语音，UP结束，CANCEL或向上48dp取消；录音期间MOVE优先处理且取消后不触发空格/光标手势。普通空格滑动继续移除长按消息，保留光标移动。语音长按：MOVE 只切换 voiceCancelArmed 并通知 setVoiceCancelArmed，取消与提交统一在 UP 决定；startVoiceInput 传入空格键行顶部的窗口纵坐标供面板截止。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/ImeSettingsFragment.kt",
@@ -2711,7 +3190,7 @@
       {
         "path": "app/src/androidTest/java/com/yuyan/SpeechIntegrationTest.kt",
         "role": "语音协议、凭据、真实接口和触摸入口回归",
-        "notes": "真实调用需 speechApiKey 运行时参数及 externalFilesDir/speech-test.pcm；speechProfile=rich 验证繁体/说话人等，speechUiTest=true 验证触摸与录音并恢复设置。；新增 connectionCheckUsesCurrentProviderAndCancelsItsSession 与 liveBuiltInConnectionCheckRecognizesItsBundledSample；真实检查只需运行时 speechApiKey，不需要外部音频或麦克风权限，临时配置用 commit 恢复。"
+        "notes": "真实调用需 speechApiKey 运行时参数及 externalFilesDir/speech-test.pcm；speechProfile=rich 验证繁体/说话人等，speechUiTest=true 验证触摸与录音并恢复设置。；新增 connectionCheckUsesCurrentProviderAndCancelsItsSession 与 liveBuiltInConnectionCheckRecognizesItsBundledSample；真实检查只需运行时 speechApiKey，不需要外部音频或麦克风权限，临时配置用 commit 恢复。 新增悬浮模式宽度/位置稳定、真实PCM和提前最终结果等待、上滑及迟到回调隔离；等待实际会话开始、PCM和提交就绪，避免固定延时在并行构建时误判。"
       },
       {
         "path": "yuyansdk/src/main/res/layout/preference_speech_option.xml、drawable/ic_speech_option_help.xml",
@@ -2752,6 +3231,86 @@
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/speech/SpeechConnectionCheck.kt",
         "role": "应用内语音供应商实际连接检查",
         "notes": "读取当前设置和运行时加密凭据，通过公共 SpeechSession 发送 assets/speech/connection_check.pcm；按供应商采样率转换 PCM，不使用麦克风，25 秒超时且 finally 释放；成功必须收到最终非空识别文字。"
+      },
+      {
+        "path": "yuyansdk/native/publish_dictionaries.py",
+        "role": "独立词库发布",
+        "notes": "只拉取词库仓库，按上游提交和生成规则校验是否需要更新，输出不可变SHA256包与兼容清单。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/DictionaryStore.kt",
+        "role": "词库包与部署资源管理",
+        "notes": "默认白霜，雾凇按需；校验全部支持方案、SHA256、尺寸与兼容标识；部署顺序保持全拼优先，启用日志用于中断恢复。兼容包索引默认留空，configuredIndex一次清理旧未发布默认URL；5.4.0的默认源更新由DictionaryRules内置官方规则负责。restoreBundled从APK重新复制白霜并清理损坏的部署资源，不依赖active.json可解析。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/SyncProtocol.kt",
+        "role": "多设备合并协议与周期计算",
+        "notes": "逐项版本向量、删除标记与稳定的冲突决策；最新策略使用修改时间，日周月采用本地自然周期。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/SyncScope.kt",
+        "role": "八类数据范围",
+        "notes": "设置、学习、常用语、剪贴板、主题、符号菜单、基础词库和词库更新规则；同步与导出复用类别定义，分别选择。控制项与凭据只留本机，未选择的雾凇不下载。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/WebDavClient.kt",
+        "role": "WebDAV网络协议",
+        "notes": "HTTPS、禁止携带凭据重定向、PROPFIND尺寸、If-Match条件提交、内容校验；日志不含地址和凭据。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/WebDavSync.kt",
+        "role": "分类双向同步流程",
+        "notes": "只读取启用类别，CAS失败重新合并；下载资源后复查本机变化，空闲应用；每设备每类保留五份云端变更记录。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/LocalDataSnapshot.kt",
+        "role": "可迁移用户数据快照",
+        "notes": "设置和Room行转逻辑记录，主题路径相对化，学习数据经JNI导出再重建；旧备份转换不覆盖运行中的数据库文件。scopes声明分类恢复范围，select仅保留选中记录和必要blob，apply只覆盖包含类别。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/BackupArchive.kt",
+        "role": "分类导出与恢复事务",
+        "notes": "完整包保留格式2，分类包使用格式3，scopes同时存在于metadata和受SHA256校验的data.json并要求一致；先保存完整恢复快照再应用，中断时恢复并重建编译索引。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/DataChangeTracker.kt",
+        "role": "本机修改时间追踪",
+        "notes": "偏好监听、SQLite触发器与异步学习时间记录，初始默认数据不冒充新的用户修改。触发器必须使用UPDATE加INSERT WHERE NOT EXISTS，外层Room UPDATE OR ABORT会覆盖INSERT OR REPLACE并造成主键冲突；onOpen事务内替换旧触发器。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/TransferCoordinator.kt",
+        "role": "使用时触发与后台编排",
+        "notes": "更新和同步频率独立，保留中断标记；状态按update/sync隔离并兼容全局读取，hasPendingUpdate供取消入口显隐。所选词库在独立进程下载、构建与测试，空闲后应用已验证缓存；更新详情只提示一次。支持取消、同一失败版本抑制重试、配置变化拒绝启用与恢复默认。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/TransferFiles.kt",
+        "role": "传输文件基础操作",
+        "notes": "流式校验、AtomicFile读写恢复、路径检查和解压限额。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/transfer/TransferOperation.kt",
+        "role": "数据操作互斥",
+        "notes": "序列化导出、恢复、资源激活和同步，避免共享快照及恢复日志交叉覆盖。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/TransferSettingsFragment.kt",
+        "role": "词库设置页",
+        "notes": "保留旧导航ID；当前词库可选择或获取，支持更新频率、导入、恢复默认。builtin仅显示公共设置，custom显示编辑与选择，network显示地址/获取与选择，package显示包索引；无任务时隐藏取消。云同步移至独立页。"
+      },
+      {
+        "path": "yuyansdk/src/main/java/com/yuyan/imemodule/manager/UserDataManager.kt",
+        "role": "导出与旧备份兼容入口",
+        "notes": "导出默认全选，可传类别集合；预览包含范围，兼容格式1至3；格式2/3走统一校验恢复，旧格式转为逻辑数据与学习词条。"
+      },
+      {
+        "path": "app/src/androidTest/java/com/yuyan/TransferIntegrationTest.kt",
+        "role": "数据传输集成回归",
+        "notes": "真实引擎、真实词库和显式提供的WebDAV测试目录；分类导出验证格式3、仅选中数据恢复、其他类别保留及范围元数据篡改拦截，全选仍为格式2。缺少外部夹具时明确跳过，可用require参数强制要求。"
+      },
+      {
+        "path": "app/src/androidTest/java/com/yuyan/SyncDeviceScenarioTest.kt",
+        "role": "两设备分阶段回归",
+        "notes": "通过明确stage参数跨设备交替修改、合并和删除，最后恢复测试前数据。"
       }
     ],
     "constraints": [
@@ -2764,7 +3323,7 @@
       "手写相关的 ML Kit 调用只能存在于 :hw 进程（HandwritingService 及其引用的 MlKitHandwritingModel），主进程任何文件都不得 import com.google.mlkit.*",
       "注音一律经 PolyphoneReading，禁止直接调用 PinyinHelper.toHanYuPinyinMulti——后者会输出古音与罕用音",
       "反射访问 androidx 私有字段（RecyclerView$ViewHolder.itemView、Preference.mDefaultValue）依赖 proguard.cfg 中的 keep 规则，升级依赖或新增此类反射时必须同步维护",
-      "5.0.0 随 APK 分发方案与词典源文件，可在设备上重新部署 speller/algebra；EngineRuntime 负责模糊音模板替换和部署。基础词库仍由电脑按固定提交生成，应用尚无 Git 来源管理或在线词库更新入口",
+      "5.3.0仅内置白霜，雾凇按需拉取；构建版本由dependencies.lock.json锁定，独立发布脚本生成兼容包；手机按周期首次使用或手动检查，在键盘空闲时部署并验证。",
       "界面仍将候选列表为空视为本轮输入结束；RimeEngine 必须在组合文本非空而无匹配时保留原文候选，任何过滤都不能把有效组合输入的候选滤空。原文候选无对应的 librime 下标，必须通过 RAW_INPUT_CANDIDATE 映射直接提交",
       "改动 showCandidates 的组成（增删、重排、并入其它来源）时必须同步维护 RimeEngine 的 rimeIndexMap，否则选词会取到错误的引擎下标；5.0.0 已删除应用层模糊音重放及 fuzzySourceMap",
       "拼音编辑不得移动引擎自身的插入点：librime 只翻译插入点之前的编码，挪到中间会让候选只剩前半段。插入点记在 RimeEngine.editCaret，编辑后整串同步给引擎",
@@ -2773,7 +3332,9 @@
       "模糊音一类派生等价拼写的 algebra 规则必须排在双拼键位 xform 与九键数字映射之前：xform 不保留原形，转换后 ^zh 之类的规则已匹配不到。白霜全拼把模糊音块放在 algebra 首位正是此理",
       "librime 部署时缺 <dict>.reverse.bin 会无条件置 rebuild_table（dict_compiler.cc 中该检查不判断是否存在源文件），继而用收集到的空数据重建 table。因此没有 dict.yaml 时不能只靠 table.bin 重建 prism；反过来说，正常部署本就会产出 reverse.bin，语燕 assets 缺它是打包时去掉的",
       "迁移用户词库须走 librime levers 的 export_user_dict/import_user_dict 文本通道，不要直接改名搬运 LevelDB 目录：导出文本只含词条、标准全拼音节与使用次数，可跨方案名与 librime 版本；直接搬目录则要同时赌这两者兼容",
-      "语音测试或运行时供应商密钥不得写入源码、Git、BuildConfig、资源、APK、默认偏好或日志；凭据仅由 SpeechCredentials 在 noBackupFilesDir 保存 Keystore 加密密文。"
+      "语音测试或运行时供应商密钥不得写入源码、Git、BuildConfig、资源、APK、默认偏好或日志；凭据仅由 SpeechCredentials 在 noBackupFilesDir 保存 Keystore 加密密文。",
+      "用户数据完整导出包括学习记录和已安装基础词库；学习记录使用librime文本接口，禁止直接云同步LevelDB目录或编译缓存。",
+      "云同步按八类独立清单隔离（含词库更新规则）；关闭类别不读取或写入云端内容，也不将缺席数据解释为删除。WebDAV凭据、设备标识和同步控制项仅留本机。"
     ]
   }
 }
