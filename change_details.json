@@ -3,6 +3,24 @@
   "updatedAt": "2026-11-09",
   "entries": [
     {
+      "id": "20261109-05",
+      "date": "2026-11-09",
+      "type": "chore",
+      "title": "提交推送并正式发布语燕SelfOpt 5.5.0",
+      "trigger": "用户要求提交、推送并发布 release，提交信息不得包含 Claude 共创署名。",
+      "rootCause": "5.2.7 发布后，5.3.0 至 5.5.0 的改动按用户要求一直未提交；yuyansdk 构建时会把 git HEAD 与是否有未提交改动写入 BuildConfig.AppCommitHead，提交前构建的安装包带 -dirty 标识，不能直接用于发布。",
+      "solution": "先在 yuyansdk 提交全部改动（642dfcb）并推送，再提交主仓库的测试、工作流、文档、记录与子模块指针（4908ccb）并推送；两边提交信息均为简体中文，不含任何 AI 署名。工作区干净后重新构建 Release，在 4908ccb 上创建附注标签 selfopt-v5.5.0 并推送，用 gh 发布「语燕 SelfOpt 5.5.0」并上传安装包。发布说明重点标注雾凇不再内置的升级影响及应用自动处理方式，不含设备与个人信息。之后回填本批条目的提交哈希。",
+      "changedFiles": [
+        "change_log.md、change_details.json：回填 20261104-05 至 20261109-04 的提交哈希，新增本条，更新 20261109-04 产物信息与 latestVerifiedRelease"
+      ],
+      "verification": "Release 构建完成后两个仓库仍无未提交改动；apksigner 验证 v1/v2 签名通过，zipalign -c -P 16 通过，lib/arm64-v8a 下 libdigitalink.so 与 libselfopt_rime.so 的 LOAD 段均为 16KB 对齐，aapt2 显示 versionCode 50500、versionName 5.5.0，dex 内嵌源码标识为 4908ccbd9fef7df2845ef5df8f529818e77af1a8 且不带 -dirty。发布后用 gh 下载远端附件，SHA256 为 83a8a5c071f9b92fc813f01644085001c3f17962c9a7b2c320c8579b81819f19，与本地一致，大小 52534822 字节；release 不是草稿或预发布，并标记为 Latest。手机上安装的仍是提交前构建的 5.5.0（带 -dirty 标识），功能代码与发布包一致。",
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
+      "lessons": [
+        "yuyansdk 会把 git HEAD 写入安装包，正式发布的安装包必须在两个仓库都提交并保持干净后重新构建，再核对 dex 内的源码标识。"
+      ],
+      "release": { "tag": "selfopt-v5.5.0", "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.5.0", "sha256": "83a8a5c071f9b92fc813f01644085001c3f17962c9a7b2c320c8579b81819f19" }
+    },
+    {
       "id": "20261109-04",
       "date": "2026-11-09",
       "type": "feat",
@@ -22,13 +40,13 @@
         "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本 5.5.0 与说明同步"
       ],
       "verification": "Release 构建成功（5.5.0/50500），androidTest 同步编译通过，按约定只做真机验证、未运行模拟器测试。真机（竖屏 Termius、终端模式、停靠）覆盖安装后：工具栏删除键左侧出现搜索图标，容器顶部整行入口消失，右下角显示悬浮回车键；打开搜索后输入框显示光标，边框加深，行高与工具栏一致，终端按键行保留；输入 ht 只进入搜索框，Termius 提示符不变，点击 h 与 t 之间再输入 x 得到 hxt，确认可以定位光标；提交后出现「搜索：hxt　清除」细栏、搜索图标高亮、空结果提示，点「清除」后恢复完整列表、取消高亮。测试中出现一次误操作：计算「清除」坐标时把显示坐标 1446 写成 1746，点中了悬浮回车键，向 Termius 的空命令行发送了一次回车，终端只多出一行提示符，没有执行命令；这也表明悬浮回车在终端模式下按终端路径发送。语音的整段补发、上滑暂停与下滑恢复、面板让出空格行由用户在真机上实测，反馈正常；我没有在真机上执行语音录音。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "输入法窗口不能获取窗口焦点，键盘内的本地输入框必须显式开启 focusableInTouchMode，否则 requestFocus 失败，自绘光标也不会出现。",
         "在真机上点击宿主为终端或聊天应用的界面之前，要先由截图核对目标坐标；悬浮回车等会向宿主发送按键的控件附近，尤其要避免估算坐标。",
         "Kotlin 尾随 lambda 绑定到最后一个参数；给已有构造函数新增回调参数时，要放在原回调之前或改用具名参数，避免破坏现有调用。"
       ],
-      "localArtifacts": { "directory": "build/deliverables/5.5.0", "apk": "yuyanSelfOpt_5.5.0_release.apk", "sha256": "5fd164e4cd0fd6b6a3f7bf269fa30721b78d402c01f1109b98a9115a4e62bb89", "sizeBytes": 52534820, "checks": "版本50500/5.5.0，覆盖安装到真机成功；未重新核验签名与16KB对齐。", "remotePublished": false }
+      "localArtifacts": { "directory": "build/deliverables/5.5.0", "apk": "yuyanSelfOpt_5.5.0_release.apk", "sha256": "83a8a5c071f9b92fc813f01644085001c3f17962c9a7b2c320c8579b81819f19", "sizeBytes": 52534822, "checks": "从已提交源码（主仓库 4908ccb、SDK 642dfcb）重新构建；版本50500/5.5.0，v1/v2签名、ZIP 16KB对齐、两项ARM64 ELF 16KB对齐通过，dex内嵌源码标识为4908ccb且不带-dirty；见20261109-05。", "remotePublished": true }
     },
     {
       "id": "20261109-03",
@@ -42,7 +60,7 @@
         "change_log.md、change_details.json：新增本条，并在 20261106-03 中补充 followUp"
       ],
       "verification": "用户在 Termius 8.0.1 中实测 Alt+Enter 可用；adb 确认 Termius 版本为 8.0.1、更新时间为 2026-11-09 14:45。本条没有重新采集字节。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "终端组合键异常要先排除宿主终端版本问题：同一输入法版本下，Termius 7.4.0 失败而 8.0.1 正常，输入法本身没有改动。"
       ]
@@ -61,7 +79,7 @@
         "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本与说明同步"
       ],
       "verification": "5.4.6 未单独构建，改动随 5.5.0 构建并在真机验证。修复前复现数据：竖屏真机（终端模式加悬浮），触摸区 (320,280)-(1280,1077)；向下拖300px变为 (320,577)-(1280,1374)，再向上拖到最大回到 (320,280)-(1280,1077)。窗口 frame 为 [0,140][1280,2800]。5.5.0 真机结果：悬浮模式向上拖到底，触摸区为 (198,140)-(1158,909)，顶部达到窗口顶部（y=140，修复前为 280），证实问题来自窗口对状态栏多垫的顶部内边距；停靠和悬浮两种模式下终端按键与字母键的可见高度一致；测试后已恢复为停靠模式。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "输入法窗口的 decor 会按状态栏垫顶部内边距，悬浮键盘的可拖范围要以 InputView 实际范围为准，必要时调整 fitInsetsTypes。",
         "自绘或手写布局的辅助按键行不要用固定 dp 高度，应取自 EnvironmentSingleton 的 skbHeight 与按键间距，才能跟随用户对键盘高度的调节。",
@@ -84,7 +102,7 @@
         "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本与说明同步"
       ],
       "verification": "Release 构建成功（5.4.5/50405），androidTest 同步编译通过。真机（横屏）先复现：悬浮触摸区 (1797,140)-(2757,666)，高526px、底行被裁；覆盖安装后悬浮触摸区变为 (1797,256)-(2757,899)，高643px，四行按键与拖动条完整显示，旧残留底边距被自动夹紧，无需清除数据；关闭悬浮后触摸区 (0,460)-(2800,1280)，按键铺满屏幕宽度。模拟器 emulator-5556 上定向回归3项通过：新增的悬浮高度夹紧用例、横屏悬浮高度偏好读写用例、keyboardPositionTracksSinglePixelDrags（拖动像素级位移与边界行为未变）。未覆盖：「残留边距加载后自动夹紧」没有自动化用例，只做了真机手动验证；本次未重新核验 APK 签名与16KB对齐。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "控件位置边界要按窗口内容区的实际尺寸算，不能用屏幕尺寸：窗口顶部有状态栏或刘海避让时，屏幕高度减控件高度会偏大。",
         "拖动上限不能基于已被挤压的视图当前尺寸计算，否则每次拖动都会放宽一次。应测量未受挤压的自然尺寸。",
@@ -109,7 +127,7 @@
         "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本与说明同步"
       ],
       "verification": "编译和Debug构建通过。已通过悬浮键盘真实PCM录音、松开提交、提前最终结果等待和上滑取消后的迟到回调隔离，宽度与位置保持；语音面板上滑取消、横向触摸保留及花漾字编辑兼容通过。英文搜索输入、准确粘贴、清除、空结果和取消10.14秒通过。最终中文搜索、搜索中的输入法重启保持及宿主隔离通过。7项定向回归分轮通过；tests-final.log中6项通过，录音一项受固定等待时序影响，改为等待实际会话/PCM/提交后，tests-final-focused.log两项18.32秒通过。最终Release版本50404/5.4.4，v1/v2签名、ZIP完整性、16KB ZIP和两项ARM64 ELF对齐通过。界面证据voice-floating.png、clipboard-filtered.png。 最终外层浮层与准备提示条修复后，3项81.312秒通过，横屏悬浮专项1项10.532秒通过；截图voice-floating-final.png、voice-floating-landscape-final.png确认标题完整、键盘未扩宽，旋转设置已恢复。 最终包覆盖安装并成功显示输入法，证据release-smoke.png；默认输入法保持正式版，测试夹具与语音配置已恢复。日志位于tmp_voice_clipboard_20261108。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "自适应容器上的覆盖层不能用MATCH_PARENT决定自身范围，应使用已测量的内容宽高并扣除位置留白。",
         "长按手势取消必须优先于普通空格滑动；服务提前返回最终结果也不能抢在松开前提交。",
@@ -140,7 +158,7 @@
         "build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本和说明同步"
       ],
       "verification": "第一轮4项测试43.993秒通过：设置关闭/重开保留强度、四分位不会关闭、旧关闭状态兼容、系统触感请求不忽略全局设置，yvwo等8种拼音输入的原生边界与编辑及已有拼音编辑回归。最终7项96.962秒全部通过，补充普通/悬浮手柄1至2像素位移、下边界限位后再上移、悬浮拖动条微调，英文补全开/关两种模式中连续一次大写、候选提交、双击CapsLock及解锁后得到ABcDe，并重验气泡真实屏幕点击编辑和宿主焦点。日志tmp_feedback_20261108/tests-feedback-pinyin.log、tests-expanded.log；最终Release版本50403/5.4.3，v1/v2签名、ZIP完整性、16KB ZIP及两项ARM64 ELF对齐通过，覆盖安装成功。正式设置页实际将音量调至23%、触感调至较弱再关闭，滑条保留原位置并变灰；重新启用后恢复，检查后回到跟随系统。截图tmp_feedback_20261108/release-feedback-enabled.png、release-feedback-disabled.png。 区分UiAutomation直接参数与ADB远端Shell引用后，补充2项24.673秒回归通过；最终读回确认默认输入法及启用列表恢复正确，日志tests-cleanup-final.log。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "开关与强度分开持久化；兼容旧备份缺失新键时须动态推导，不能仅在进程启动计算一次默认值。",
         "全拼原生preedit已有合法边界，不能把字母别名与注释的差异当作分词点。",
@@ -171,7 +189,7 @@
         "build.gradle、yuyansdk/README.md、change_log.md、change_details.json：版本和说明同步"
       ],
       "verification": "Debug、AndroidTest和Release构建成功。普通/悬浮气泡真实屏幕点击进入编辑、中间插入后raw input为nimhao且宿主保留焦点，既有定向回归25.572秒通过；实际九键输入nihao截图确认紧凑气泡，菜单截图确认终端图标缩细。最终包版本50402/5.4.2，v1/v2签名、ZIP完整性、16KB ZIP和两项ARM64 ELF对齐通过，无内置雾凇，覆盖安装启动成功；手工检查后恢复并核对输入法选择与启用列表。证据：tmp_small_fixes_20261106/tests-5.4.2-composing.log、ui-5.4.2-composing.png、ui-5.4.2-menu-scrolled.png、release-5.4.2-*.log。首轮遇到AGP资源增量内部错误；清理两处资源增量缓存的命令被自动审批以blocked by policy拒绝，未执行删除，改用两个资源任务的--rerun完成构建。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "补强触摸命中应优先修复布局和焦点处理，避免无意扩大既有拼音气泡的视觉留白。",
         "AGP资源增量合并内部错误可对具体packageResources任务使用--rerun，无需清理整个工程。",
@@ -203,7 +221,7 @@
         "build.gradle、app/build.gradle、README.md、yuyansdk/README.md、change_log.md、change_details.json：版本、测试导航依赖和说明同步"
       ],
       "verification": "调试构建成功；首轮5项核心测试57.683秒通过，包含旧完整备份重复恢复。最后一轮5项15.511秒通过，覆盖词库/云同步条件显隐与实际范围弹窗、非悬浮/悬浮圆角、真实屏幕点击后在拼音中间插入字符且宿主焦点保留、动态取色和按钮蒙版、分类恢复不改其他数据、类别元数据篡改拒绝。另从官方GitHub实际拉取雾凇14个文件、构建测试并启用，106.746秒通过，采集到总进度与当前文件百分比，断言范围合法且总进度不回退。日志：tmp_small_fixes_20261106/tests-core.log、tests-final.log、tests-progress-live.log。最终混淆Release的v1/v2签名、ZIP完整性、16KB ZIP及ELF对齐通过，版本50401/5.4.1，未打包雾凇。正式设置页确认入口拆分、官方模式隐藏无关字段、同步/导出八类弹窗；通过SAF实际导出仅应用设置的ZIP，验证格式3、仅settings范围、无blob且校验正确。首次无任务提示已修正，并在最终包检查词库状态与条件显隐。证据：tmp_small_fixes_20261106/release-layout-*.json、release-dictionary.png、release-sync-scopes.png、release-export-check.json。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "改变背景取色时必须保留非悬浮和悬浮气泡各自的圆角语义；点击编辑应验证屏幕触摸与宿主焦点，不能只调用监听器。",
         "上游字典YAML头可能包含超过64KB的修订注释；按行流式读取到文档终止符，并设置合理上限。",
@@ -228,7 +246,7 @@
       "solution": "只做状态查询、截图和按键对照，未改产品代码或安装软件。经用户确认新标签不通过tmux共享后，退出右侧测试标签的Codex进入Shell。期间Termius自带Alt进入锁定态，已通过第三次点击清除。尝试输入监听命令未取得可见有效结果，随后临时切换到已安装搜狗输入法。",
       "changedFiles": ["change_log.md、change_details.json：记录未完成的诊断和设备恢复状态"],
       "verification": "确认语燕5.4.0、Termius7.4.0及Codex0.166.0。输入法Alt选中后按回车，Codex未出现可见换行；尚未采集到有效的按键字节。设备断开ADB后，恢复语燕的命令返回device not found，没有成功执行，已立即告知用户手动恢复输入法并关闭右侧测试标签。左侧原Codex会话未退出，未向Codex提交提示词。",
-      "commits": {"main": "未提交", "yuyansdk": "未提交"},
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "followUp": "2026-11-09：用户将 Termius 更新到 8.0.1 后 Alt+Enter 恢复正常，输入法侧没有改动，详见 20261109-03。",
       "lessons": ["不要用其他终端通过的结果推断Termius正常。", "Termius自带Alt有单次、锁定、关闭三态，第二次点击不是关闭。", "未回显的命令不等于未进入输入缓冲，必须先取得可靠键值或回显证据；设备断开后不可声称恢复操作已经完成。"]
     },
@@ -245,7 +263,7 @@
         "change_log.md、change_details.json：补充真实终端验证结果"
       ],
       "verification": "真实Termux 0.118.3、4KB页面环境下，realTermuxEditingPasteAndStickyInterrupt在27.629秒内通过。断言Alt+Enter到达PTY为ESC加换行（1b 0a或1b 0d），F12为1b 5b 32 34 7e；上键加回车重复追加得到两行repeat；光标编辑、粘贴和Ctrl+C中断后继续输入通过。测试前后原Bash进程保持同一实例，未遗留tmp_yuyan_terminal结果或历史文件，默认输入法和启用列表恢复，剪贴板由finally恢复，界面回到原Shell提示符。日志：tmp_mobile_20261106/tests-termux-live.log；清理后的界面：tmp_mobile_20261106/termux-live-verified.png。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "测试宿主的活动实例与焦点可能在输入法切换后变化，应追踪当前恢复的Activity并重新获取输入框，不能只持有最初startActivitySync返回的引用。",
         "终端测试必须先确认新增Shell，再发送命令；独立HISTFILE避免污染用户历史。会话结束后不要无条件再发Enter，终端可能已自动返回用户原会话。"
@@ -278,7 +296,7 @@
         "app/src/androidTest/java/com/yuyan/ThemeLayoutRegressionTest.kt、TerminalInputIntegrationTest.kt、MobileDictionaryIntegrationTest.kt：界面、按键、真实源码构建及恢复回归"
       ],
       "verification": "官方Android 15/16KB隔离模拟器通过最终12项回归，覆盖实际拖动两次并重开、真实回车触摸与外部Alt事件、展开记忆、动态采样、蒙版、规则导入、关闭规则同步不应用远端数据及取消构建保留旧版。另完成3项真实词库测试：雾凇官方源拉取构建和逐方案验证后启用约79秒；白霜官方源完整更新通过；损坏词库未启用，状态清单破坏后成功恢复内置白霜并保留用户目录数据。用户随后通过!手动命令成功清理重构并下载安装Termux ARM64；重新核验APK哈希与交付包完全相同，签名、ZIP完整性及16KB对齐通过。该独立16KB环境的ARM64版Termux因libtermux-bootstrap.so加载报empty/missing DT_HASH/DT_GNU_HASH退出，未生成bash，并出现过system_server重启；后续已在另一台可用环境完成真实终端测试，见20261106-02。证据见tmp_mobile_20261106/termux-arm64-crash.log与user-rebuild-signature.log。Release校验见localArtifacts。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "excluded": "用户撤销第8项：不开发手动移动光标后暂停预测，保留既有onUpdateSelection联想逻辑。",
       "lessons": [
         "SQLite外层语句的ON CONFLICT策略可能覆盖触发器中的OR REPLACE；使用显式UPDATE与INSERT WHERE NOT EXISTS兼容低版本SQLite，并在数据库打开时替换旧触发器。",
@@ -318,7 +336,7 @@
         "build.gradle、README.md、yuyansdk/README.md：版本和现有使用说明"
       ],
       "verification": "官方Android 15、16KB模拟器通过7项定向回归；补充菜单实际选中态与更新源一次迁移后，相关5项再次通过。普通/悬浮的英文、九键和数字键盘在最大纵向间距下验证工具栏不裁切、不与首排重叠，调节/重置后仍可输入；裁剪页面截图和设置入口实测通过。最终Release产物校验见localArtifacts。",
-      "commits": { "main": "未提交（按用户要求）", "yuyansdk": "未提交（按用户要求）" },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "照片主题的isDark表示字色配套，不能替代系统或手动明暗槽位状态。",
         "更新源迁移只能执行一次，不能持续屏蔽用户随后主动配置的同一URL。",
@@ -369,10 +387,7 @@
         }
       ],
       "verification": "Debug、测试APK和R8压缩Release构建通过。分轮通过10项传输回归和13项Rime输入回归，另完成真实坚果云条件写入、连续同步、七类开关隔离及两设备修改和删除传播验证。本地词库导入、部署中断后阻止同版本自动重试补测通过；更新详情弹窗验证只出现一次。主要测试使用官方Android 15、16KB模拟器；3GB配置曾被低内存管理终止，扩大测试内存后补测通过；第三方ARM转换环境初始化超时，未计入通过，未进行真机验证。最终Release为5.3.0/50300，v1/v2签名、ZIP完整性、16KB ZIP和ELF对齐通过。APK为52436863字节，SHA256=c415f7f30aa84b40cb4ea260d812f3584d5d7d4e8734ccec5706c084c52c0cea；内置白霜36332018字节，未包含雾凇和测试凭据。按用户要求只保留本地代码与安装包，不提交、推送或发布；独立词库包可本地导入，默认在线频道未发布。",
-      "commits": {
-        "main": "未提交（按用户要求）",
-        "yuyansdk": "未提交（按用户要求）"
-      },
+      "commits": { "main": "4908ccbd9fef7df2845ef5df8f529818e77af1a8", "yuyansdk": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6" },
       "lessons": [
         "坚果云GET返回未加引号的ETag，仍支持If-Match并拒绝过期写入；HEAD可能返回0长度，资源去重应使用PROPFIND/getcontentlength。",
         "多设备冲突必须保留版本向量与删除记录，关闭类别不能生成删除标记，也不能把全部数据合入同一个云端清单。",
@@ -2574,14 +2589,14 @@
         "configureCommand": "cmake -S tmp_rime_jni -B tmp_rime_jni/build -G Ninja -DCMAKE_MAKE_PROGRAM=<sdk>/cmake/3.31.6/bin/ninja.exe -DCMAKE_TOOLCHAIN_FILE=<sdk>/ndk/28.2.13676358/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release"
       },
       "latestVerifiedRelease": {
-      "tag": "selfopt-v5.2.7",
-      "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.2.7",
-      "mainCommit": "9d27659a58da9913c3b5773af3517fa8a92ef69d",
-      "sdkCommit": "5455049c6c70116be3a2ec8503543654fc234606",
-      "artifact": "yuyanSelfOpt_5.2.7_release.apk",
-      "sha256": "9bd4365e8fa9c7b1d1c6e0a533012b8e6af2500fa96a9ccc89c20591216b1a71",
-      "verification": "2026-11-04从提交源码构建并验证签名、版本、源码标识、ZIP完整性和16KB对齐。现有发行记录更新为5.2.7，旧APK附件已替换；新附件元数据与实际下载SHA256均一致，确认正式版且为latest。"
-    }
+        "tag": "selfopt-v5.5.0",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.5.0",
+        "mainCommit": "4908ccbd9fef7df2845ef5df8f529818e77af1a8",
+        "sdkCommit": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6",
+        "artifact": "yuyanSelfOpt_5.5.0_release.apk",
+        "sha256": "83a8a5c071f9b92fc813f01644085001c3f17962c9a7b2c320c8579b81819f19",
+        "verification": "2026-11-09从已提交源码构建，验证签名、版本、源码标识、ZIP与ELF 16KB对齐；发布后下载远端附件，SHA256一致，确认为正式版并标记为latest。"
+      }
     },
     "codeMap": [
       { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/ImeInlineEditor.kt", "role": "键盘内单行原文输入条（花漾字处理栏与剪贴板搜索共用）", "notes": "包含 ImeSourceEditText 与清空按钮，显式开启 focusable/focusableInTouchMode 以便本地焦点和光标；清空按钮随文本自动显隐；applyTheme 提供圆角底框和 activated 加深边框，由调用方在焦点变化时设置 isActivated。" },
