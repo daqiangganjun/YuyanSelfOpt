@@ -1,49 +1,45 @@
+import com.android.build.api.artifact.SingleArtifact
+import com.android.build.api.variant.BuiltArtifactsLoader
+
 plugins {
-    id 'com.android.application'
-    id 'kotlin-android'
+    alias(libs.plugins.android.application)
 }
 
 kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
+    jvmToolchain(libs.versions.jvmToolchain.get().toInteger())
 }
 
 android {
-    compileSdk 36
-    buildToolsVersion '36.0.0'
-    namespace 'com.yuyan'
+    compileSdk = libs.versions.compileSdk.get().toInteger()
+    buildToolsVersion = libs.versions.buildTools.get()
+    namespace = 'com.yuyan'
     defaultConfig {
-        applicationId "com.yuyan.selfopt"
-        minSdk 23
-        targetSdk 36
-        versionCode rootProject.ext.appVersionCode
-        versionName rootProject.ext.appVersionName
+        applicationId = "com.yuyan.selfopt"
+        minSdk = libs.versions.minSdk.get().toInteger()
+        targetSdk = libs.versions.targetSdk.get().toInteger()
+        versionCode = rootProject.ext.appVersionCode
+        versionName = rootProject.ext.appVersionName
 
-        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         ndk {
-            abiFilters 'arm64-v8a'
-        }
-
-        // 项目仅提供简体中文资源，剔除依赖库携带的其余语言资源
-        resourceConfigurations += ['zh-rCN']
-
-        javaCompileOptions {
-            annotationProcessorOptions {
-                arguments = [AROUTER_MODULE_NAME: project.getName()]
-            }
-        }
-
-        lintOptions {
-            abortOnError false
+            abiFilters += ['arm64-v8a']
         }
     }
-    
+
+    // 项目仅提供简体中文资源，剔除依赖库携带的其余语言资源
+    androidResources {
+        localeFilters += ['zh-rCN']
+    }
+
+    lint {
+        abortOnError = false
+    }
+
     // minSdk 23 无需 legacy 打包：.so 以非压缩对齐方式存储，安装时不再解压，
     // dlopen 可直接从 APK 页映射，既省一份磁盘占用也加快首次加载
-    packagingOptions {
+    packaging {
         jniLibs {
-            useLegacyPackaging false
+            useLegacyPackaging = false
         }
     }
 
@@ -52,72 +48,108 @@ android {
             def keystorePropertiesFile = rootProject.file("keystore/keystore.properties")
             def keystoreProperties = new Properties()
             if (keystorePropertiesFile.exists()) {
-                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+                keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
             }
             def keystoreFilePath = System.getenv("RELEASE_STORE_FILE") ?: keystoreProperties.getProperty('storeFile')
             def keystorePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: keystoreProperties.getProperty('storePassword')
             def keyAliasName = System.getenv("RELEASE_KEY_ALIAS") ?: keystoreProperties.getProperty('keyAlias')
             def keyPasswordValue = System.getenv("RELEASE_KEY_PASSWORD") ?: keystoreProperties.getProperty('keyPassword')
-            def keystoreFile = rootProject.file(keystoreFilePath)
-            if (keystoreFile.exists() && keystorePassword && keyAliasName && keyPasswordValue) {
-                storeFile keystoreFile
-                storePassword keystorePassword
-                keyAlias keyAliasName
-                keyPassword keyPasswordValue
-                v1SigningEnabled true
-                v2SigningEnabled true
+            def keystoreFile = keystoreFilePath ? rootProject.file(keystoreFilePath) : null
+            if (keystoreFile?.exists() && keystorePassword && keyAliasName && keyPasswordValue) {
+                storeFile = keystoreFile
+                storePassword = keystorePassword
+                keyAlias = keyAliasName
+                keyPassword = keyPasswordValue
+                enableV1Signing = true
+                enableV2Signing = true
             }
         }
     }
 
-    //多渠道打包
     flavorDimensions = ["default"]
     productFlavors {
         offline {
-            dimension "default"
-            applicationIdSuffix  ".offline"
+            dimension = "default"
+            applicationIdSuffix = ".offline"
         }
     }
 
     buildTypes {
         release {
-            // 混淆
-            minifyEnabled true
-            shrinkResources true
-            applicationIdSuffix  ".release"
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard.cfg'
-            signingConfig signingConfigs.release
+            // 同时启用代码与资源优化，并内含 proguard-android-optimize 默认规则；
+            // 自定义规则位于 src/main/keepRules，库的规则由 consumerProguardFiles 传入
+            optimization {
+                enable = true
+            }
+            applicationIdSuffix = ".release"
+            signingConfig = signingConfigs.release
         }
 
         debug {
-            applicationIdSuffix ".debug"
-            signingConfig signingConfigs.release
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.release
         }
+    }
 
-    }
-    //    第三方库使用java1.8
     compileOptions {
-        sourceCompatibility 17
-        targetCompatibility 17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    android.applicationVariants.configureEach { variant ->
-        variant.outputs.configureEach {
-            outputFileName = "yuyanSelfOpt_${rootProject.ext.appVersionName}_${variant.buildType.name}.apk"
+}
+
+/**
+ * 以「yuyanSelfOpt_版本_构建类型.apk」复制一份 APK。新 Variant API 不再提供改写输出文件名的公开接口，
+ * 按 gradle-recipes 的 listenToArtifacts 做法在打包完成时自动复制，原产物保持不变。
+ */
+abstract class CopyNamedApk extends DefaultTask {
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract DirectoryProperty getApkFolder()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputFolder()
+
+    @Input
+    abstract Property<String> getApkName()
+
+    @Internal
+    abstract Property<BuiltArtifactsLoader> getBuiltArtifactsLoader()
+
+    @TaskAction
+    void copy() {
+        def output = outputFolder.get().asFile
+        output.deleteDir()
+        output.mkdirs()
+        def builtArtifacts = builtArtifactsLoader.get().load(apkFolder.get())
+        if (builtArtifacts == null) throw new GradleException("Cannot load APKs from ${apkFolder.get()}")
+        builtArtifacts.elements.each { element ->
+            java.nio.file.Files.copy(new File(element.outputFile).toPath(), new File(output, apkName.get()).toPath())
         }
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def copyTask = tasks.register("copy${variant.name.capitalize()}NamedApk", CopyNamedApk) {
+            outputFolder = layout.buildDirectory.dir("outputs/selfopt/${variant.name}")
+            apkName = "yuyanSelfOpt_${rootProject.ext.appVersionName}_${variant.buildType}.apk"
+            builtArtifactsLoader = variant.artifacts.builtArtifactsLoader
+        }
+        variant.artifacts.use(copyTask).wiredWith { it.apkFolder }.toListenTo(SingleArtifact.APK.INSTANCE)
     }
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation project(':yuyansdk')
-    androidTestImplementation 'androidx.test:runner:1.6.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
-    androidTestImplementation 'androidx.preference:preference-ktx:1.2.1'
-    androidTestImplementation 'androidx.navigation:navigation-fragment-ktx:2.8.5'
-    androidTestImplementation 'androidx.lifecycle:lifecycle-livedata-core:2.6.2'
-    androidTestImplementation 'androidx.room:room-runtime:2.6.1'
-    androidTestImplementation 'androidx.constraintlayout:constraintlayout:2.2.0'
-    androidTestImplementation 'com.google.android.material:material:1.12.0'
-    androidTestImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    androidTestImplementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2'
+    // 设备测试 APK 与被测应用共用版本目录，避免两边类路径版本漂移
+    androidTestImplementation libs.androidx.test.runner
+    androidTestImplementation libs.androidx.test.ext.junit
+    androidTestImplementation libs.androidx.preference.ktx
+    androidTestImplementation libs.androidx.navigation.fragment.ktx
+    androidTestImplementation libs.androidx.room.runtime
+    androidTestImplementation libs.androidx.constraintlayout
+    androidTestImplementation libs.google.material
+    androidTestImplementation libs.okhttp
+    androidTestImplementation libs.kotlinx.serialization.json
 }

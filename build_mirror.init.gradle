@@ -1,4 +1,4 @@
-// 本地构建加速：将 Maven 仓库重定向至阿里云镜像，不修改项目内任何构建脚本
+// 可选的构建加速：将 Maven 仓库重定向至阿里云镜像，不修改项目内任何构建脚本
 def mirrorUrls = [
         'https://maven.aliyun.com/repository/public',
         'https://maven.aliyun.com/repository/google',
@@ -8,14 +8,16 @@ def mirrorUrls = [
 
 def applyMirrors = { RepositoryHandler handler ->
     handler.clear()
-    mirrorUrls.each { mirrorUrl -> handler.maven { url mirrorUrl } }
+    mirrorUrls.each { mirrorUrl -> handler.maven { url = mirrorUrl } }
 }
 
+// 项目仓库统一声明在 settings.gradle 且禁止项目级仓库，镜像须替换 settings 层的声明
 settingsEvaluated { settings ->
     applyMirrors(settings.pluginManagement.repositories)
+    applyMirrors(settings.dependencyResolutionManagement.repositories)
 }
 
-allprojects { project ->
+// 根项目 buildscript 仍需仓库来解析 Kotlin Gradle 插件
+allprojects {
     buildscript { applyMirrors(repositories) }
-    applyMirrors(project.repositories)
 }

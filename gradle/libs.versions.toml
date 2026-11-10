@@ -1,0 +1,70 @@
+[versions]
+# 构建工具链
+agp = "9.5.1"
+kotlin = "2.4.21"
+ksp = "2.3.13"
+# compileSdk 只决定可调用的 API（OkHttp 5.5 起要求 37），运行时行为由 targetSdk 决定，二者分开升级
+buildTools = "36.0.0"
+compileSdk = "37"
+targetSdk = "36"
+minSdk = "23"
+jvmToolchain = "17"
+# 库
+appcompat = "1.8.0"
+constraintlayout = "2.2.2"
+coroutines = "1.11.0"
+# 1.7 起要求 minSdk 24
+emoji2 = "1.6.0"
+exifinterface = "1.4.2"
+flexbox = "3.0.0"
+material = "1.14.0"
+mlkitDigitalInk = "19.0.0"
+# 2.10 起要求 minSdk 24，提高 minSdk 前停留在 2.9 系列
+navigation = "2.9.8"
+okhttp = "5.5.1"
+preference = "1.2.1"
+room = "2.8.5"
+serializationJson = "1.12.0"
+snakeyaml = "2.7"
+splitties = "3.0.0"
+# 2.12 起要求 minSdk 24
+work = "2.11.2"
+# 设备测试
+androidxTestRunner = "1.7.0"
+androidxTestJunit = "1.3.0"
+
+[libraries]
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
+androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
+androidx-emoji2 = { module = "androidx.emoji2:emoji2", version.ref = "emoji2" }
+androidx-emoji2-views = { module = "androidx.emoji2:emoji2-views", version.ref = "emoji2" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
+androidx-navigation-fragment-ktx = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "navigation" }
+androidx-navigation-ui-ktx = { module = "androidx.navigation:navigation-ui-ktx", version.ref = "navigation" }
+androidx-preference-ktx = { module = "androidx.preference:preference-ktx", version.ref = "preference" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "work" }
+google-flexbox = { module = "com.google.android.flexbox:flexbox", version.ref = "flexbox" }
+google-material = { module = "com.google.android.material:material", version.ref = "material" }
+mlkit-digital-ink = { module = "com.google.mlkit:digital-ink-recognition", version.ref = "mlkitDigitalInk" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serializationJson" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+splitties-resources = { module = "com.louiscad.splitties:splitties-resources", version.ref = "splitties" }
+splitties-views-dsl-appcompat = { module = "com.louiscad.splitties:splitties-views-dsl-appcompat", version.ref = "splitties" }
+splitties-views-dsl-constraintlayout = { module = "com.louiscad.splitties:splitties-views-dsl-constraintlayout", version.ref = "splitties" }
+splitties-views-dsl-recyclerview = { module = "com.louiscad.splitties:splitties-views-dsl-recyclerview", version.ref = "splitties" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
+androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestJunit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

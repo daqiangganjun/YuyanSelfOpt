@@ -36,7 +36,7 @@ jobs:
       - name: Prepare native build dependencies
         run: |
           python -m pip install -r yuyansdk/native/requirements.txt
-          sdkmanager "ndk;28.2.13676358" "cmake;3.31.6"
+          sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.31.6"
 
       - name: Cache native sources
         uses: actions/cache@v4
@@ -59,8 +59,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            app/build/outputs/apk/offline/release/*.apk
-            app/build/outputs/apk/offline/debug/*.apk
+            app/build/outputs/selfopt/offlineRelease/*.apk
+            app/build/outputs/selfopt/offlineDebug/*.apk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

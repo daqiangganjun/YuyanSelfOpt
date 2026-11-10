@@ -1211,7 +1211,7 @@ class TerminalInputIntegrationTest {
         val preset = com.yuyan.imemodule.data.menuSkbFunsPreset
         val baseline = listOf(SkbMenuMode.ClipBoard, SkbMenuMode.Emojicon, SkbMenuMode.TextEdit, SkbMenuMode.SwitchKeyboard).map { preset.getValue(it) }
         val clipboard = com.yuyan.imemodule.data.candidateToolbarItems(baseline, SkbMenuMode.ClipBoard)
-        assertEquals(listOf(SkbMenuMode.ClearClipBoard, SkbMenuMode.LockClipBoard, SkbMenuMode.Phrases, SkbMenuMode.ClipBoard), clipboard.asReversed().map { it.skbMenuMode })
+        assertEquals(listOf(SkbMenuMode.ClipboardSearch, SkbMenuMode.ClearClipBoard, SkbMenuMode.LockClipBoard, SkbMenuMode.Phrases, SkbMenuMode.ClipBoard), clipboard.asReversed().map { it.skbMenuMode })
         var clipboardX: Int? = null
         instrumentation.runOnMainSync {
             input.resetToIdleState()
@@ -1241,8 +1241,9 @@ class TerminalInputIntegrationTest {
                 view.getLocationOnScreen(location)
                 location[0]
             }
-            assertEquals(SkbMenuMode.ClearClipBoard, shown[0].tag)
-            assertEquals(SkbMenuMode.LockClipBoard, shown[1].tag)
+            assertEquals(SkbMenuMode.ClipboardSearch, shown[0].tag)
+            assertEquals(SkbMenuMode.ClearClipBoard, shown[1].tag)
+            assertEquals(SkbMenuMode.LockClipBoard, shown[2].tag)
             clipboardX?.let { expected ->
                 val location = IntArray(2)
                 requireNotNull(menuItem(input, SkbMenuMode.ClipBoard)).getLocationOnScreen(location)

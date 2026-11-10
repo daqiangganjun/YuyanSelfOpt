@@ -1,34 +1,30 @@
 buildscript {
     repositories {
-        gradlePluginPortal()
         mavenCentral()
-        google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.11.1'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.21'
-        classpath 'org.jetbrains.kotlin:kotlin-serialization:2.2.21'
-        classpath 'com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:2.2.21-2.0.5'
+        // AGP 内置 Kotlin 默认绑定较旧的 KGP，在此统一到版本目录中的 Kotlin 版本
+        classpath libs.kotlin.gradle.plugin
     }
+}
+
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.parcelize) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.ksp) apply false
 }
 
 // 语义化版本单一来源，app 与 yuyansdk 共用。递增规则见 CLAUDE.md「版本号规范」
 ext {
     versionMajor = 5
-    versionMinor = 5
+    versionMinor = 6
     versionPatch = 0
     appVersionName = "$versionMajor.$versionMinor.$versionPatch"
     appVersionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
 }
 
-allprojects {
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-        google()
-    }
-}
-
 tasks.register('clean', Delete) {
-    delete project.layout.buildDirectory
+    delete layout.buildDirectory
 }

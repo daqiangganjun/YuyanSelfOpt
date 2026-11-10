@@ -24,7 +24,7 @@
 ## 与上游的差异：
 + 应用显示名称改为`语燕SelfOpt`，`applicationId`改为`com.yuyan.selfopt`，可与原版共存；
 + 「关于」页新增`上游项目`条目，指向 fork 来源；「源代码」与「吐槽与反馈」指向本仓库；
-+ 新增`build_mirror.init.gradle`构建脚本，用于国内网络环境下的镜像加速与 JDK 版本适配。
++ 新增可选的`build_mirror.init.gradle`构建脚本，用于依赖下载较慢时的镜像加速。
 + 设置页统一使用 Material 3 风格的紧凑分组、开关、滑块和弹窗；花漾字提供样式示例与按钮状态反馈，语音面板跟随键盘主题。键盘沿用原有配色，保留 Canvas 缓冲与局部重绘，按压时保留键面底色和轮廓；高度调节原位更新键盘，不增加逐键动画或新的 UI 框架。
 
 ## 设计原则：
@@ -72,12 +72,12 @@
 从 5.0.2 起，默认使用系统底栏，不主动隐藏系统导航栏；原「全面屏键盘优化」更名为「底部快捷栏」，可按需增加快捷按钮和滑动光标功能。已保存的快捷栏选择在升级时保留，未配置用户使用新的默认值。系统底栏的按钮样式及输入法切换入口取决于系统、导航方式和已启用的输入法数量。
 
 ## 开发环境：
-> Android SDK: minSdk 23, [app/build.gradle](./app/build.gradle)  
-> 第三方库: [build.gradle](./build.gradle)  
-> JDK: 官方推荐 OpenJDK 17；本仓库通过 `build_mirror.init.gradle` 额外兼容 JDK 21
+> Android SDK: minSdk 23、targetSdk 36、compileSdk 37  
+> 工具链与第三方库版本: [gradle/libs.versions.toml](./gradle/libs.versions.toml)  
+> JDK: 运行 Gradle 需 JDK 17 及以上；编译统一使用 Java 17 toolchain，本机缺少时由 Gradle 自动下载
 
 ## 构建项目：
-以下为在 **Windows + JDK 21 + 国内网络环境** 下，不依赖 Android Studio、纯命令行完成构建的完整过程。若你使用 Android Studio 且网络通畅，可直接沿用上游 README 的常规导入方式。
+以下为在 **Windows** 下不依赖 Android Studio、纯命令行完成构建的完整过程。使用 Android Studio 时可直接导入项目。
 
 ### 1. 克隆项目并拉取子模块
 ```sh
@@ -85,9 +85,9 @@ git clone git@github.com:daqiangganjun/YuyanSelfOpt.git
 cd YuyanSelfOpt
 git submodule update --init --recursive
 ```
-若 GitHub 直连失败，可临时经代理拉取（不写入全局配置）：
+若 GitHub 直连失败，可临时经 HTTP 代理拉取（不写入全局配置）：
 ```sh
-git -c http.proxy=socks5://127.0.0.1:10808 -c https.proxy=socks5://127.0.0.1:10808 submodule update --init --recursive
+git -c http.proxy=http://<代理地址>:<端口> submodule update --init --recursive
 ```
 
 ### 2. 配置 Android SDK 路径
@@ -99,7 +99,7 @@ sdk.dir=C\:\\Users\\<用户名>\\AppData\\Local\\Android\\Sdk
 **必需的 SDK 组件**：
 | 组件 | 说明 |
 |---|---|
-| Platform android-36 | 对应 `compileSdk 36` |
+| Platform android-37.0 | 对应 `compileSdk 37`（OkHttp 5.5 起的要求）；运行时行为仍以 `targetSdk 36` 为准 |
 | Build-Tools 36.0.0 | 两个模块显式指定的构建版本，也用于 `apksigner`、`aapt2`、`zipalign` 验证 |
 | NDK 28.2.13676358 / CMake 3.31.6 | 编译开源 librime 与本项目 JNI，版本固定在 `yuyansdk/native/dependencies.lock.json` |
 | Python 3.12 与 PyYAML | 准备固定版本源码、生成白霜与雾凇方案包 |
@@ -110,9 +110,9 @@ python -m pip install -r .\yuyansdk\native\requirements.txt
 ```
 Gradle 的 `buildRimeNative` 任务会自动获取锁定版本的源码、校验 Boost 压缩包并编译 `libselfopt_rime.so`。源码缓存位于 `yuyansdk/native/.cache/`，生成的动态库与词库包位于 `yuyansdk/build/generated/rime/`；均不入库。首次构建需要能够访问 GitHub 的 HTTPS 连接，后续构建复用本地缓存，不依赖 `tmp_rime_jni/`。
 
-构建工具链固定为 AGP 8.11.1、Gradle 8.14.3、Kotlin 2.2.21 与 KSP 2.2.21-2.0.5，Java/Kotlin 编译目标均为 JVM 17。Gradle 会尝试自动安装缺失的 Build-Tools，但该过程走 `dl.google.com` 且不遵循 init script 中的镜像配置；国内网络下可通过 SDK Manager 指定 HTTP 代理安装：
+构建工具链为 AGP 9.5.1（使用内置 Kotlin 支持与新 DSL）、Gradle 9.9.0（wrapper 校验官方 SHA256）、Kotlin 2.4.21 与 KSP 2.3.13，所有版本集中在 `gradle/libs.versions.toml`；仓库统一在 `settings.gradle` 声明。部分 AndroidX 新版本要求 minSdk 24，目录中已注明并停留在仍支持 minSdk 23 的版本。Gradle 会自动安装缺失的 SDK 平台与 Build-Tools，该过程访问 `dl.google.com`；无法访问时可用 SDK Manager 手动安装（需要时附加 `--proxy=http --proxy_host=<地址> --proxy_port=<端口>`）：
 ```powershell
-& '<SDK>/cmdline-tools/latest/bin/sdkmanager.bat' 'build-tools;36.0.0' --proxy=http --proxy_host=127.0.0.1 --proxy_port=10808
+& '<SDK>/cmdline-tools/latest/bin/sdkmanager.bat' 'platforms;android-37.0' 'build-tools;36.0.0'
 ```
 
 ### 3. 生成签名文件并配置
@@ -134,25 +134,24 @@ keyPassword=<你的密码>
 ```
 
 ### 4. 构建辅助脚本 build_mirror.init.gradle
-仓库根目录的 `build_mirror.init.gradle` 是一个 Gradle init script，将 `mavenCentral()`、`google()`、`gradlePluginPortal()` 重定向至阿里云镜像，解决国内网络下的依赖下载问题。Java/Kotlin 的 JVM 17 编译目标已直接声明在两个模块中，无需依靠本机脚本对齐。
-
-网络通畅时可省略该脚本。
+仓库根目录的 `build_mirror.init.gradle` 是一个可选的 Gradle init script，将 `settings.gradle` 中声明的插件与依赖仓库替换为阿里云镜像，适用于访问 Google Maven、Maven Central 较慢的网络。网络通畅时无需使用。
 
 ### 5. 执行构建
 ```sh
 # Debug 版本
-./gradlew assembleOfflineDebug --init-script build_mirror.init.gradle
+./gradlew assembleOfflineDebug
 
-# Release 版本（含 R8 混淆与资源压缩，体积更小）
-./gradlew assembleOfflineRelease --init-script build_mirror.init.gradle
+# Release 版本（R8 代码与资源优化，体积更小）
+./gradlew assembleOfflineRelease
 ```
-Windows 下使用 `gradlew.bat`。
+需要镜像加速时在命令末尾附加 `--init-script build_mirror.init.gradle`。Windows 下使用 `gradlew.bat`。
 
-产物路径：
+产物路径（打包完成时自动复制并命名，AGP 原始产物仍位于 `app/build/outputs/apk/offline/<构建类型>/`）：
 ```
-app/build/outputs/apk/offline/debug/yuyanSelfOpt_<versionName>_debug.apk
-app/build/outputs/apk/offline/release/yuyanSelfOpt_<versionName>_release.apk
+app/build/outputs/selfopt/offlineDebug/yuyanSelfOpt_<versionName>_debug.apk
+app/build/outputs/selfopt/offlineRelease/yuyanSelfOpt_<versionName>_release.apk
 ```
+Release 的应用级混淆规则位于 `app/src/main/keepRules/app.keep`，yuyansdk 的规则经 `consumerProguardFiles` 传入。
 版本号采用三段式语义化版本，唯一来源为根 `build.gradle` 的 `ext` 块（`versionMajor` / `versionMinor` / `versionPatch`），递增规则见 `CLAUDE.md`「版本号规范」。
 
 ### 6. 验证与安装
@@ -202,8 +201,9 @@ adb shell am instrument -w -e require16Kb true -e downloadHandwritingModel true 
 ### 常见构建问题
 | 现象 | 原因与处理 |
 |---|---|
-| `Could not download gradle-8.11.1.jar` | 未使用镜像 init script，或代理不可达 |
-| `Failed to install build-tools;36.0.0` | Gradle 自动安装走 `dl.google.com`，参照步骤 2 手动安装 |
+| 依赖或插件下载失败 | 网络无法访问 Google Maven、Maven Central 或 Gradle 插件门户；可附加镜像 init script |
+| 下载 Gradle 发行包时 `Connection reset` | 偶发网络中断；wrapper 已配置重试 3 次，重新执行即可 |
+| `Failed to install platforms;android-37.0` 或 build-tools | Gradle 自动安装走 `dl.google.com`，参照步骤 2 手动安装 |
 | `Can't connect to SOCKS proxy: Network is unreachable` | Java 的 `-DsocksProxyHost` 与仅监听 IPv6 的代理不兼容，改用镜像方案 |
 | `SDK XML versions up to 3 ... version 4 was encountered` | 无害警告，AGP 与 cmdline-tools 版本不一致所致，可忽略 |
 | 雷电模拟器中选择语燕无效，`ime set` 报成功但仍为内置输入法 | 已在雷电 14 验证：`adb -s <设备标识> shell settings put secure default_input_method com.yuyan.selfopt.offline.release/com.yuyan.imemodule.service.ImeService`；再查询 `settings get secure default_input_method` 并实际输入验证。Debug 包应将包名末尾改为 `.debug` |
