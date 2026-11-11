@@ -1,7 +1,37 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-10",
+  "updatedAt": "2026-11-11",
   "entries": [
+    {
+      "id": "20261111-01",
+      "date": "2026-11-11",
+      "type": "feat",
+      "title": "物理键盘候选栏可见、自动全拼与检查更新，minSdk 提至 24",
+      "trigger": "上一轮发现 Android 11 起物理键盘模式看不到候选栏、默认九键方案下物理键盘无法组合，并提出 minSdk 24 以跟进依赖；用户选择三项均处理，同时要求新增连接 GitHub Release 的检查更新。",
+      "rootCause": "Android 11 起输入法窗口可见性由宿主的 IME insets 控制，只经 setCandidatesViewShown 显示的候选窗口从未获得显示请求，surface 一直未绘制；且存在物理键盘时 IMS 会拒绝宿主的隐式显示请求。方案在 saveInputMode 中直接取偏好 pinyinModeRime，九键、乱序17、笔画、手写的按键码在物理键盘上无从输入。navigation 2.10、emoji2 1.7、work 2.12 要求 minSdk 24。",
+      "solution": "物理键盘模式改以 CandidateView 作为输入视图：onEvaluateInputViewShown 在有候选时为真，ImeService 以 observeForever 监听 DecodingInfo 候选，出现时 requestShowSelf(0)（API 28 以下用 showSoftInputFromInputMethod）显式显示，清空时 requestHideSelf；onComputeInsets 原有物理键盘分支保证不挤压宿主、仅候选栏可触。CandidateView 进入物理键盘模式即创建以处理首个按键，尚未挂窗的实例在系统取输入视图时交出；视图从窗口移除即 DESTROYED、观察者被清空，模式切换与窗口重建时新建实例。CandidateView 的引擎状态观察者只在状态变化时重置组合，避免挂窗激活时清掉首键；组合中 Esc 或返回键取消输入。InputModeSwitcher 记录物理键盘状态，chineseSchema 把九键、乱序17、笔画、手写换为全拼，双拼保持，切换时重选方案。FloatCandidatesBarAdapter 只在方向键选中后高亮。minSdk 提至 24，升级 navigation 2.10.2、emoji2 1.7.0、WorkManager 2.12.0，删除两处 API 24 版本判断，Release 停用 v1 签名。新增 AppUpdateChecker，从 releases 列表中挑选 selfopt-v 前缀的最高正式版，忽略上游标签与预发布；「关于」新增「检查更新」，显示更新说明并打开 APK 下载链接或发布页，不新增权限。",
+      "changedFiles": [
+        "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt：物理键盘以 CandidateView 为输入视图，按候选显式显示或收起窗口，模式切换替换输入视图",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/candidate/CandidateView.kt：引擎状态变化才重置组合，Esc/返回键取消组合",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/manager/InputModeSwitcher.kt：isHardwareKeyboard 与 chineseSchema",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/FloatCandidatesBarAdapter.kt：只在选中后高亮",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/data/update/AppUpdateChecker.kt（新）、ui/fragment/AboutFragment.kt、application/CustomConstant.kt、res/values/strings.xml：检查更新",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/prefs/AppPrefs.kt、ui/fragment/base/ManagedPreferenceFragment.kt：删除 API 24 版本判断",
+        "gradle/libs.versions.toml：minSdk 24，navigation、emoji2、WorkManager 升至最新；app/build.gradle：停用 v1 签名",
+        "README.md：最低 Android 7.0、物理键盘、中英混输开关、工具栏定制与检查更新说明"
+      ],
+      "verification": "Debug、Release、androidTest 构建通过。16KB AVD（开启硬件键盘、关闭显示屏幕键盘、默认九键方案）上：输入 nihao 时候选栏紧贴光标显示 1~9 序号候选，方案已自动换为全拼；↓ 翻页序号重排；按 1 上屏你好后窗口收起；shi 后按 Esc 取消且不上屏；Ctrl+Space 英文输入 ab cd 只有一个空格；zhongw 退格两次后空格上屏中。打开系统显示屏幕键盘并换输入框后出现九键软键盘，按 6、4 得到 ni 及左侧拼音列，方案恢复九键。「关于 → 检查更新」在 5.6.0 提示已是最新；临时以 5.4.0 构建降级安装后弹出「发现新版本 5.5.0」及说明，「下载安装包」交给 Chrome 打开 GitHub 链接。crash 缓冲区为空。",
+      "commits": {
+        "main": "待回填",
+        "yuyansdk": "2c04c1cdc1ea4b3e38eb735287a281f672847a70"
+      },
+      "lessons": [
+        "存在物理键盘时 IMS 会拒绝隐式显示请求，输入法需以 requestShowSelf(0) 显式请求；onShowInputRequested 仍要求 onEvaluateInputViewShown 为真。",
+        "IMS 只在需要显示时调用 onCreateInputView，物理键盘按键早于窗口显示到达，处理按键的视图须提前创建。",
+        "LifecycleRelativeLayout 的观察者在首次挂窗时才激活并立即收到当前值，带副作用的观察者（如重置组合）会在此刻误触发，须比较前值。",
+        "重装输入法后系统可能尚未重新绑定（mBoundToMethod=false），按键会直接进入应用，需重新聚焦输入框触发绑定后再测试。"
+      ]
+    },
     {
       "id": "20261110-02",
       "date": "2026-11-10",
@@ -2621,9 +2651,9 @@
       },
       "os": "Windows，终端使用 PowerShell",
       "jdk": "本机 JDK 21.0.4 运行 Gradle；编译经 kotlin.jvmToolchain(17) 使用 foojay 自动下载的 Adoptium JDK 17（~/.gradle/jdks），CI 使用 JDK 17",
-      "toolchain": "AGP 9.5.1（内置 Kotlin 与新 DSL）、Gradle 9.9.0（wrapper 校验官方 SHA256，retries=3）、Kotlin/KGP 2.4.21（根 buildscript classpath 覆盖 AGP 绑定的 2.2.10）、KSP 2.3.13；版本集中在 gradle/libs.versions.toml；compileSdk 37（platforms;android-37.0）、targetSdk 36、minSdk 23、Build-Tools 36.0.0；ML Kit digital-ink-recognition 19.0.0",
+      "toolchain": "AGP 9.5.1（内置 Kotlin 与新 DSL）、Gradle 9.9.0（wrapper 校验官方 SHA256，retries=3）、Kotlin/KGP 2.4.21（根 buildscript classpath 覆盖 AGP 绑定的 2.2.10）、KSP 2.3.13；版本集中在 gradle/libs.versions.toml；compileSdk 37（platforms;android-37.0）、targetSdk 36、minSdk 24、Build-Tools 36.0.0；ML Kit digital-ink-recognition 19.0.0",
       "android16KbValidation": "Android CLI 便携入口位于 D:/Path/android-cli；模拟器 37.2.12 位于 D:/Path/android-sdk-emulator/emulator，SDK/emulator 通过目录联接引用，二者已加入用户 PATH。官方 Android 15 google_apis_ps16k x86_64 r5 镜像安装于 SDK/system-images/android-35/google_apis_ps16k/x86_64，支持 ARM64 转换；WHPX 可用，实际 PAGE_SIZE=16384。隔离 AVD 与日志位于当前工作区 tmp_16kb_20261028；使用时设置 ANDROID_AVD_HOME 指向该目录的 avd 子目录。Android CLI 的布局输出在 Windows 下需显式使用 UTF-8，防止中文乱码。2026-11-10 为测试物理键盘，将该 AVD 的 hw.keyboard 改为 yes、hw.keyboard.lid 改为 no，以 -no-window -port 5560 启动；该 AVD 上的 Debug 应用偏好曾被改为全拼并关闭物理键盘显示软键盘，复测前需核对",
-      "physicalKeyboardTesting": "雷电模拟器给输入法进程报告无物理键盘，无法测试物理键盘路径；官方 AVD 需 hw.keyboard=yes、hw.keyboard.lid=no，并关闭系统 show_ime_with_hard_keyboard 与应用「物理键盘显示软键盘」。Android 11+ 物理键盘悬浮候选栏不绘制（原有缺陷，5.5.0 相同），可用 uiautomator 读取上屏文本验证逻辑；默认九键方案下物理键盘字母不组合",
+      "physicalKeyboardTesting": "雷电模拟器给输入法进程报告无物理键盘，无法测试物理键盘路径；官方 AVD 需 hw.keyboard=yes、hw.keyboard.lid=no，并关闭系统 show_ime_with_hard_keyboard 与应用「物理键盘显示软键盘」。5.6.0 起物理键盘候选栏以输入视图按需显示，可直接截图验证；重装后需重新聚焦输入框触发绑定。该 AVD 上 Debug 应用当前为九键方案，show_ime_with_hard_keyboard 曾在测试中多次切换，复测前核对",
       "ldplayerImeSelection": "当前雷电 14.0.8.1（Android 14/API 34）曾出现系统选择窗口与 ime set 均不改变默认项的情况；对明确指定设备执行 adb -s <serial> shell settings put secure default_input_method com.yuyan.selfopt.offline.release/com.yuyan.imemodule.service.ImeService 后可恢复。必须核对系统设置、dumpsys 及实际输入，不能仅看 selected 返回；不要关闭用户正在使用的模拟器或清空应用数据",
       "androidSdk": "%LOCALAPPDATA%\\Android\\Sdk，含 platforms android-34/35/36/37.0、build-tools 34.0.0（手动装）与 36.0.0",
       "ndk": "NDK 28.2.13676358 与 CMake 3.31.6 已装（sdkmanager 走代理：--proxy=http --proxy_host=127.0.0.1 --proxy_port=10808）。沿用预编译 .so 时确实不需要 NDK，但自编译 librime 需要；旧记录『不需要 NDK』已作废",
@@ -2926,12 +2956,12 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/manager/InputModeSwitcher.kt",
         "role": "输入语言、键盘布局和编辑器动作切换",
-        "notes": "中文全键模式为 0x1010；input_method_pinyin_mode 与 input_method_pinyin_mode_rime 分别保存布局和逻辑方案。isTerminalMode 独立保存进入前模式和最近语言模式，英文直输不更改中文方案，终端期间不覆盖 inputDefaultMode；退出恢复原模式；用户主动更换中文布局时按当前中文偏好恢复，保持布局与方案一致。回车动作由 EditorInfo 推导，但有候选时 InputView 优先提交组合串。Shift使用单调时钟，只有当前一次大写且连续点击才锁定，输入后清除双击计时。"
+        "notes": "中文全键模式为 0x1010；input_method_pinyin_mode 与 input_method_pinyin_mode_rime 分别保存布局和逻辑方案。isTerminalMode 独立保存进入前模式和最近语言模式，英文直输不更改中文方案，终端期间不覆盖 inputDefaultMode；退出恢复原模式；用户主动更换中文布局时按当前中文偏好恢复，保持布局与方案一致。回车动作由 EditorInfo 推导，但有候选时 InputView 优先提交组合串。Shift使用单调时钟，只有当前一次大写且连续点击才锁定，输入后清除双击计时。 isHardwareKeyboard 由 ImeService 同步；chineseSchema 在物理键盘下把九键、乱序17、笔画、手写换为全拼，双拼保留，切换时经 saveInputMode 重选方案，偏好与布局不变。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/candidate/FloatCandidateBar.kt",
         "role": "物理键盘的拼音预览与横向候选展示",
-        "notes": "直接读取 DecodingInfo 的组合文本；候选为空时隐藏整栏，进一步说明原文输入也需要保留候选 ↑↓ 按页翻动（pageStarts 记录各页起点），←→ 移动高亮；仅在本栏请求下一页、组合文本不变且新列表以旧列表开头时保留滚动位置。序号与选中状态依赖 showCandidates 重置，Android 11+ 物理键盘模式下本栏不绘制（原有问题）。"
+        "notes": "直接读取 DecodingInfo 的组合文本；候选为空时隐藏整栏，进一步说明原文输入也需要保留候选 ↑↓ 按页翻动（pageStarts 记录各页起点），←→ 移动高亮；仅在本栏请求下一页、组合文本不变且新列表以旧列表开头时保留滚动位置。序号与选中状态依赖 showCandidates 重置；所在窗口由 ImeService 按候选有无显示或收起。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/TextKeyboard.kt",
@@ -3046,7 +3076,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/candidate/CandidateView.kt",
         "role": "物理键盘候选界面",
-        "notes": "支持引擎状态及重试；视图构造不再重置全局输入模式，迟创建的 EditorInfo 由服务补发。 按下与抬起共用 isChineseInputKey（仅中文模式且无 Alt 时消费），按下已消费但未处理的键在抬起时转发；Ctrl+Space 在抬起时切换语言。数字键按可见页取候选，无候选时原样转发。"
+        "notes": "支持引擎状态及重试；视图构造不再重置全局输入模式，迟创建的 EditorInfo 由服务补发。 按下与抬起共用 isChineseInputKey（仅中文模式且无 Alt 时消费），按下已消费但未处理的键在抬起时转发；Ctrl+Space 在抬起时切换语言。数字键按可见页取候选，无候选时原样转发。 引擎状态观察者只在状态变化时重置组合（本视图在首键后才挂窗）；组合中 Esc/返回键在抬起时取消输入。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/KeyPreset.kt",
@@ -3066,7 +3096,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/AboutFragment.kt",
         "role": "应用关于界面",
-        "notes": "源码许可证标注与根 LICENSE 同步为 BSD-3-Clause。"
+        "notes": "源码许可证标注与根 LICENSE 同步为 BSD-3-Clause。 「检查更新」经 AppUpdateChecker 查询，发现新版显示说明并打开 APK 下载链接或发布页，已是最新或失败时以 Toast 提示。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/data/KeyRecordStack.kt",
@@ -3111,7 +3141,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
         "role": "输入法服务、编辑器和语音会话生命周期",
-        "notes": "activeInputConnection 将花漾字原文路由到本地连接，普通输入直接提交原文；宿主预览使用会话捕获的目标连接。监视窗口外部触摸切换原始输入；输入重启根据处理意图和路由修订恢复处理栏，避免覆盖用户原始输入选择。输入会话边界取消语音及旧转换。 同一输入目标重启时保留剪贴板搜索，避免清理本地连接或重启花漾字路由。 isSoftKeyboard = 应用偏好 || super.onEvaluateInputViewShown()，onEvaluateInputViewShown 直接返回它，显示与按键路由同一判定；系统开关变化在下次 onStartInput 生效。光标锚点为 NaN 时不移动候选栏。"
+        "notes": "activeInputConnection 将花漾字原文路由到本地连接，普通输入直接提交原文；宿主预览使用会话捕获的目标连接。监视窗口外部触摸切换原始输入；输入重启根据处理意图和路由修订恢复处理栏，避免覆盖用户原始输入选择。输入会话边界取消语音及旧转换。 同一输入目标重启时保留剪贴板搜索，避免清理本地连接或重启花漾字路由。 isSoftKeyboard = 应用偏好 || super.onEvaluateInputViewShown()，显示与按键路由同一判定，系统开关变化在下次 onStartInput 生效。物理键盘模式以 CandidateView 为输入视图（hardwareCandidateView 进入该模式即创建），onEvaluateInputViewShown 仅在有候选时为真，observeForever 候选后 requestShowSelf/requestHideSelf 按需显示窗口；模式切换或窗口重建时新建输入视图，不复用已移除的实例。光标锚点为 NaN 时不移动候选栏。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
@@ -3131,7 +3161,7 @@
       {
         "path": "app/build.gradle",
         "role": "应用模块构建配置",
-        "notes": "compileSdk/targetSdk 36、minSdk 23、arm64-v8a、Build-Tools 36.0.0、JVM 17；版本由根语义化版本派生，debug/release 使用同一签名配置；原生库非压缩并以 16 KB ZIP 对齐；androidTest 显式依赖 Room 2.6.1 2026-11-10 起：AGP 9 新 DSL 与内置 Kotlin，jvmToolchain(17)；compileSdk 37、targetSdk 36；optimization { enable = true }，规则在 src/main/keepRules/app.keep；CopyNamedApk 经 toListenTo(SingleArtifact.APK) 复制命名产物到 outputs/selfopt/<变体>；androidTest 依赖取自版本目录。以上覆盖前文的 36/Room 2.6.1 描述。"
+        "notes": "compileSdk/targetSdk 36、minSdk 23、arm64-v8a、Build-Tools 36.0.0、JVM 17；版本由根语义化版本派生，debug/release 使用同一签名配置；原生库非压缩并以 16 KB ZIP 对齐；androidTest 显式依赖 Room 2.6.1 2026-11-10 起：AGP 9 新 DSL 与内置 Kotlin，jvmToolchain(17)；compileSdk 37、targetSdk 36；optimization { enable = true }，规则在 src/main/keepRules/app.keep；CopyNamedApk 经 toListenTo(SingleArtifact.APK) 复制命名产物到 outputs/selfopt/<变体>；androidTest 依赖取自版本目录。以上覆盖前文的 36/Room 2.6.1 描述。 minSdk 24 起 enableV1Signing = false。"
       },
       {
         "path": "yuyansdk/build.gradle",
@@ -3393,13 +3423,14 @@
         "role": "两设备分阶段回归",
         "notes": "通过明确stage参数跨设备交替修改、合并和删除，最后恢复测试前数据。"
       },
-      { "path": "gradle/libs.versions.toml", "role": "工具链、SDK 级别与依赖版本目录", "notes": "AGP、Kotlin、KSP、compileSdk/targetSdk/minSdk、Build-Tools、jvmToolchain 与全部库版本的唯一来源（应用版本号除外）；因 minSdk 23 停留的版本已注明原因；foojay 为 settings 插件，版本写在 settings.gradle。" },
+      { "path": "gradle/libs.versions.toml", "role": "工具链、SDK 级别与依赖版本目录", "notes": "AGP、Kotlin、KSP、compileSdk/targetSdk/minSdk、Build-Tools、jvmToolchain 与全部库版本的唯一来源（应用版本号除外）；minSdk 24 起不再有因最低版本停留的库；foojay 为 settings 插件，版本写在 settings.gradle。" },
       { "path": "settings.gradle", "role": "插件与依赖仓库、foojay 工具链解析", "notes": "pluginManagement 与 dependencyResolutionManagement 集中声明仓库，repositoriesMode 为 FAIL_ON_PROJECT_REPOS；foojay-resolver-convention 1.0.0 按 jvmToolchain 自动下载 JDK。" },
       { "path": "app/src/main/keepRules/app.keep", "role": "应用级 R8 规则（原 app/proguard.cfg）", "notes": "optimization DSL 要求规则放在 keepRules 源集；内容未改，含 -repackageclasses、-ignorewarnings 与保留行号；库规则仍由 yuyansdk/proguard.cfg 经 consumerProguardFiles 传入。" },
-      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/FloatCandidatesBarAdapter.kt", "role": "物理键盘候选适配器", "notes": "序号按当前可见页第一个完整显示的候选编排，只给 1~9 标号，字号沿用 candidateTextSize、序号 0.7 倍并固定列宽；updateVisibleIndices 只刷新已显示条目，点击取 bindingAdapterPosition。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/adapter/FloatCandidatesBarAdapter.kt", "role": "物理键盘候选适配器", "notes": "序号按当前可见页第一个完整显示的候选编排，只给 1~9 标号，字号沿用 candidateTextSize、序号 0.7 倍并固定列宽；updateVisibleIndices 只刷新已显示条目，点击取 bindingAdapterPosition。 只在方向键选中后高亮，未选中时空格仍上屏当前页首个候选。" },
       { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/database/SkbMenuCache.kt", "role": "候选栏与设置菜单的缓存及写库", "notes": "addBarMenu 位置取最大值加 1，removeBarMenu 删除固定项，persistBarOrder 在单个事务内只更新已有记录；SkbFun 主键为 (name, isKeep)，候选栏 reverseLayout，位置越大越靠左。" },
       { "path": "yuyansdk/native/data/selfopt_pure_chinese.lua", "role": "中英混输关闭时的候选过滤器", "notes": "pure_chinese 为真时丢弃含英文字母的候选；选项未设置时 librime 视为假，默认放行。过滤后为空时由 RimeEngine 保留原文候选。" },
-      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/widget/LifecycleRelativeLayout.kt", "role": "带生命周期的 RelativeLayout", "notes": "attach 时 RESUMED、detach 时 DESTROYED，自身可见性变化在 RESUMED 与 CREATED 间切换；LiveData 观察者只在可见时活跃，CandidateView 依赖它刷新候选。" }
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/view/widget/LifecycleRelativeLayout.kt", "role": "带生命周期的 RelativeLayout", "notes": "attach 时 RESUMED、detach 时 DESTROYED，自身可见性变化在 RESUMED 与 CREATED 间切换；LiveData 观察者只在可见时活跃，CandidateView 依赖它刷新候选。 观察者首次激活即收到当前值，带副作用的观察者需自行比较前值。" },
+      { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/update/AppUpdateChecker.kt", "role": "GitHub Release 更新查询", "notes": "请求 releases 列表（per_page=30），只取 selfopt-v 前缀且非草稿、非预发布的最高版本，忽略上游 v4.x 标签与 dictionaries-v1 频道；APK 取名称以 _release.apk 结尾的资产；compareVersions 按三段数字比较。识别 GitHub 限流。" }
     ],
     "constraints": [
       "版本号唯一来源为根 build.gradle 的 ext 块（versionMajor/versionMinor/versionPatch），禁止在其他文件硬编码版本号；递增规则见 CLAUDE.md「版本号规范」",
@@ -3424,7 +3455,8 @@
       "用户数据完整导出包括学习记录和已安装基础词库；学习记录使用librime文本接口，禁止直接云同步LevelDB目录或编译缓存。",
       "云同步按八类独立清单隔离（含词库更新规则）；关闭类别不读取或写入云端内容，也不将缺席数据解释为删除。WebDAV凭据、设备标识和同步控制项仅留本机。",
       "构建使用 AGP 9 新 DSL 与内置 Kotlin：不得重新引入 kotlin-android 插件、applicationVariants 等旧 API；工具链与依赖版本只在 gradle/libs.versions.toml 维护（应用版本号仍只在根 build.gradle ext）；仓库只在 settings.gradle 声明（FAIL_ON_PROJECT_REPOS）；Release 使用 optimization DSL，应用级规则只能放在 app/src/main/keepRules/*.keep",
-      "navigation 2.10、emoji2 1.7、work-runtime 2.12 起要求 minSdk 24，提高 minSdk 前不得升级；androidTest 依赖与应用运行时一致解析，不要为应用未直接声明的传递库指定版本",
+      "5.6.0 起 minSdk 为 24；androidTest 依赖与应用运行时一致解析，不要为应用未直接声明的传递库指定版本",
+      "物理键盘模式以 CandidateView 为输入视图，窗口只在有候选时经 requestShowSelf 显式显示、清空后 requestHideSelf；不得改回只靠 setCandidatesViewShown 的候选窗口（Android 11 起不绘制），也不得复用已从窗口移除的输入视图（生命周期 DESTROYED 后观察者已清空）",
       "白霜、雾凇中文方案模板引用 selfopt_pure_chinese.lua：所有词库路径（内置、发布包、手机端构建、恢复默认）都必须携带该 lua，雾凇包携带同名文件由 DictionaryStore 放行，词库索引 minAppVersion 不得低于 50600"
     ]
   }

@@ -35,7 +35,7 @@ android {
         abortOnError = false
     }
 
-    // minSdk 23 无需 legacy 打包：.so 以非压缩对齐方式存储，安装时不再解压，
+    // minSdk 23 起无需 legacy 打包：.so 以非压缩对齐方式存储，安装时不再解压，
     // dlopen 可直接从 APK 页映射，既省一份磁盘占用也加快首次加载
     packaging {
         jniLibs {
@@ -60,7 +60,8 @@ android {
                 storePassword = keystorePassword
                 keyAlias = keyAliasName
                 keyPassword = keyPasswordValue
-                enableV1Signing = true
+                // minSdk 24 起系统均校验 v2 签名，无需 v1
+                enableV1Signing = false
                 enableV2Signing = true
             }
         }
