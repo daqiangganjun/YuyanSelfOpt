@@ -83,9 +83,27 @@ class HandwritingSessionTest {
         f.stroke()
         f.session.stopWriting()
         assertTrue(f.previews.isEmpty())
-        assertTrue(f.pending)
+        // 新结果到达前继续显示上一笔的候选，不切到识别中
+        assertFalse(f.pending)
+        assertEquals(HandwritingResult.Candidates(listOf("一")), f.result)
         f.requests[1].answer("二")
         assertEquals(listOf("二"), f.previews)
+    }
+
+    @Test fun laterStrokesNeverFallBackToToolbar() {
+        val f = Fixture()
+        f.session.beginStroke(10f, 10f, 100)
+        assertNull("The first stroke keeps the toolbar", f.result)
+        assertFalse(f.pending)
+        f.session.endStroke()
+        assertTrue(f.pending)
+        f.session.beginStroke(10f, 20f, 150)
+        assertTrue("A later stroke without a result shows recognizing instead of the toolbar", f.pending)
+        f.session.endStroke()
+        f.requests[1].answer("二")
+        f.session.beginStroke(10f, 30f, 200)
+        assertEquals(HandwritingResult.Candidates(listOf("二")), f.result)
+        assertFalse(f.pending)
     }
 
     @Test fun outOfOrderCharactersKeepCommitOrderAndCurrentCandidates() {

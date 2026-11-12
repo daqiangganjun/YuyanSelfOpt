@@ -1,7 +1,34 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-11",
+  "updatedAt": "2026-11-12",
   "entries": [
+    {
+      "id": "20261112-01",
+      "date": "2026-11-12",
+      "type": "fix",
+      "title": "修复 Release 手写进程崩溃、终端模式徽标焦点框与手写候选栏闪烁",
+      "trigger": "真机测试 5.6.0 Release：手写无法识别、模型状态一直查询中且无法删除；在 Termius 终端模式打字后候选栏左上角徽标出现灰色阴影；连续手写时每次落笔候选栏都闪回工具栏。",
+      "rootCause": "一、AGP 9 默认开启 android.r8.strictFullModeForKeepRules，-keep class 不再隐含无参构造函数；firebase-components 16.1.0 自带规则只有 -keep class * implements ComponentRegistrar，ML Kit 经反射实例化 CommonComponentRegistrar 与 DigitalInkRecognitionRegistrar 时 NoSuchMethodException，RemoteModelManager.getInstance() 为 null，:hw 进程在 refreshState 中崩溃。Debug 包不经 R8，Release 冒烟测试未覆盖手写，故漏检。二、Termius 处理输入法发送的退格键（已带 FLAG_KEEP_TOUCH_MODE）时让屏幕退出触摸模式，系统把焦点交给输入法窗口首个可聚焦控件并绘制默认焦点框；输入法窗口不获窗口焦点，无法回到触摸模式，而默认焦点框只在焦点变化时移除，故一直保留。sudonote 中同样操作不退出触摸模式。三、HandwritingSession 每次落笔清空当前字结果并立即发布，候选与识别中状态都为空，候选栏退回工具栏，抬笔后显示识别中，结果到达再显示候选。",
+      "solution": "yuyansdk/proguard.cfg 显式保留 ComponentRegistrar 实现类的无参构造函数，并核查合并后全部无成员块的 keep 规则，仅此一条依赖反射构造。ImeService 在输入法窗口注册全局焦点监听，在 onFocusChanged 之前关闭新焦点控件的默认焦点框（AOSP handleFocusGainInternal 先分发全局焦点变化）。HandwritingSession 为每个字保留 shown 结果，落笔后在新结果到达前继续显示上一次候选；记录本次书写已完成笔画数，首笔写完后直到书写结束不再退回工具栏，换字时显示识别中。另将 CI 自动构建方案记入 TODO.md 待决定。",
+      "changedFiles": [
+        "yuyansdk/proguard.cfg：保留 ComponentRegistrar 无参构造函数",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt：suppressDefaultFocusHighlight",
+        "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingSession.kt：shown 与 completedStrokes",
+        "app/src/androidTest/java/com/yuyan/HandwritingSessionTest.kt：同步上一笔候选保留的预期，新增后续笔画不退回工具栏的测试",
+        "TODO.md（新）：CI 自动构建待办"
+      ],
+      "verification": "以 mapping.txt 还原崩溃堆栈定位到 MlKitHandwritingModel.refreshState 与 ComponentDiscovery 的 NoSuchMethodException；修复后 seeds.txt 含两个注册类构造函数。真机上逐步检查 mInTouchMode：Termius 中点击后为触摸模式，输入字母保持，退格后变为非触摸模式；sudonote 中退格保持触摸模式。修复后的 Release 由用户在真机确认手写识别、模型状态与删除、终端模式徽标及连续手写候选栏均正常。HandwritingSessionTest 的测试包被该机系统拒绝安装（Failure -99），未在设备上运行。",
+      "commits": {
+        "main": "待回填",
+        "yuyansdk": "8198bbc6f39cd0e0a359b7494b120b992c3cc05a"
+      },
+      "lessons": [
+        "AGP 9 起 R8 严格模式下，依赖库只写 -keep class 的规则不再保留构造函数，反射实例化的类会在 Release 中失效；迁移后须检查合并配置中无成员块的 keep 规则，并在 Release 包中实测涉及反射的功能（手写进程等）。",
+        "R8 默认把 Kotlin 空检查改写为对参数调用 getClass()，Release 中出现 'getClass() on a null object reference' 通常意味着某个非空调用目标实际为 null。",
+        "输入法窗口不获窗口焦点，宿主让屏幕退出触摸模式后无法自行恢复；默认焦点框只在焦点变化时创建或移除，应在全局焦点回调中提前关闭。",
+        "设备锁屏或熄屏时截图全黑、点击无效，先用 dumpsys power 确认 mWakefulness。"
+      ]
+    },
     {
       "id": "20261111-01",
       "date": "2026-11-11",
@@ -2709,7 +2736,7 @@
       { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/CloudSyncSettingsFragment.kt", "role": "WebDAV云同步设置页", "notes": "独立同步状态、连接配置、频率、冲突与恢复操作；参与同步的数据通过单个入口多选，确定时批量保存原范围键。" },
       { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/ui/fragment/DataScopeDialog.kt", "role": "八类数据多选弹窗", "notes": "云同步与导出复用选择界面但分别持久化；取消不改动，支持全选/全不选，导出必须至少选择一类。" },
       { "path": "app/src/androidTest/java/com/yuyan/SettingsOrganizationTest.kt", "role": "设置组织、反馈开关与弹窗集成回归", "notes": "验证词库、云同步拆分和规则显隐、实际范围弹窗；按键效果覆盖旧关闭值、独立开关缓存、重开页面、四分位不关闭和系统触感请求无忽略标记。" },
-      { "path": "yuyansdk/proguard.cfg", "role": "SDK传递给应用的必要混淆规则", "notes": "SnakeYAML TypeDescription的静态日志初始化依赖非空包名，保留org.yaml.snakeyaml及子包的包名即可，不全量保留类成员。YAML限定SafeConstructor和BeanAccess.FIELD，Android缺少的五项JavaBeans类型属于未使用路径。JNI及Preference/ViewHolder反射字段规则保留。" },
+      { "path": "yuyansdk/proguard.cfg", "role": "SDK传递给应用的必要混淆规则", "notes": "SnakeYAML TypeDescription的静态日志初始化依赖非空包名，保留org.yaml.snakeyaml及子包的包名即可，不全量保留类成员。YAML限定SafeConstructor和BeanAccess.FIELD，Android缺少的五项JavaBeans类型属于未使用路径。JNI及Preference/ViewHolder反射字段规则保留。 显式保留 ComponentRegistrar 实现类的无参构造函数：firebase-components 自带规则在 AGP 9 严格模式下不再保留构造函数，缺失时 ML Kit 组件为 null、手写进程崩溃。" },
       { "path": "yuyansdk/src/main/java/com/yuyan/imemodule/data/theme/ComposingBackgroundSampler.kt", "role": "拼音气泡取色与对比修正", "notes": "按背景实际bounds、padding及焦点变换绘制16x16样本，平均左上32dp区域；沿用按键字色并调整不透明底色到4.5:1，InputView按背景与尺寸缓存。" },
       { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/DictionaryRules.kt", "role": "内置、手动及网络词库规则与同步记录", "notes": "声明式GitHub规则限定frost/ice，保存每项时间和模式/选择，rule/记录独立同步；默认内置官方规则，恢复默认保留最新修改时间，兼容包索引仍支持。" },
       { "path": "yuyansdk/src/main/java/com/yuyan/inputmethod/dictionary/GithubDictionarySource.kt", "role": "固定上游提交的资源下载", "notes": "GitHub提交及树元数据固定同一SHA，校验长度与Git blob SHA1；按计划文件总字节与实际read报告总/当前百分比，完成文件不重复计数。YAML头以约1MB范围流式读取到终止符，兼容长注释；不拉取另一词库仓库。" },
@@ -2791,7 +2818,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/handwriting/HandwritingSession.kt",
         "role": "按字隔离的手写输入状态",
-        "notes": "当前字管理笔画修订、连续书写锁定和停笔预览，已结束的字按书写顺序提交；返回较晚的旧字不能覆盖当前字候选。isWriting只表示当前字未停笔，已选择但尚在等待提交的字不锁住按钮。取消、选词与外部输入边界统一清理。"
+        "notes": "当前字管理笔画修订、连续书写锁定和停笔预览，已结束的字按书写顺序提交；返回较晚的旧字不能覆盖当前字候选。isWriting只表示当前字未停笔，已选择但尚在等待提交的字不锁住按钮。取消、选词与外部输入边界统一清理。 每字的 shown 在新结果到达前保留上一次结果供显示；completedStrokes>0 后直到 reset 不再发布空状态（工具栏），换字时为识别中。choose 仍以 result 为准。"
       },
       {
         "path": "app/src/androidTest/java/com/yuyan/HandwritingSessionTest.kt",
@@ -3141,7 +3168,7 @@
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/service/ImeService.kt",
         "role": "输入法服务、编辑器和语音会话生命周期",
-        "notes": "activeInputConnection 将花漾字原文路由到本地连接，普通输入直接提交原文；宿主预览使用会话捕获的目标连接。监视窗口外部触摸切换原始输入；输入重启根据处理意图和路由修订恢复处理栏，避免覆盖用户原始输入选择。输入会话边界取消语音及旧转换。 同一输入目标重启时保留剪贴板搜索，避免清理本地连接或重启花漾字路由。 isSoftKeyboard = 应用偏好 || super.onEvaluateInputViewShown()，显示与按键路由同一判定，系统开关变化在下次 onStartInput 生效。物理键盘模式以 CandidateView 为输入视图（hardwareCandidateView 进入该模式即创建），onEvaluateInputViewShown 仅在有候选时为真，observeForever 候选后 requestShowSelf/requestHideSelf 按需显示窗口；模式切换或窗口重建时新建输入视图，不复用已移除的实例。光标锚点为 NaN 时不移动候选栏。"
+        "notes": "activeInputConnection 将花漾字原文路由到本地连接，普通输入直接提交原文；宿主预览使用会话捕获的目标连接。监视窗口外部触摸切换原始输入；输入重启根据处理意图和路由修订恢复处理栏，避免覆盖用户原始输入选择。输入会话边界取消语音及旧转换。 同一输入目标重启时保留剪贴板搜索，避免清理本地连接或重启花漾字路由。 isSoftKeyboard = 应用偏好 || super.onEvaluateInputViewShown()，显示与按键路由同一判定，系统开关变化在下次 onStartInput 生效。物理键盘模式以 CandidateView 为输入视图（hardwareCandidateView 进入该模式即创建），onEvaluateInputViewShown 仅在有候选时为真，observeForever 候选后 requestShowSelf/requestHideSelf 按需显示窗口；模式切换或窗口重建时新建输入视图，不复用已移除的实例。光标锚点为 NaN 时不移动候选栏。 suppressDefaultFocusHighlight 在窗口全局焦点回调中关闭默认焦点框，避免宿主退出触摸模式后输入法控件常驻灰色焦点框。"
       },
       {
         "path": "yuyansdk/src/main/java/com/yuyan/imemodule/keyboard/InputView.kt",
@@ -3457,7 +3484,8 @@
       "构建使用 AGP 9 新 DSL 与内置 Kotlin：不得重新引入 kotlin-android 插件、applicationVariants 等旧 API；工具链与依赖版本只在 gradle/libs.versions.toml 维护（应用版本号仍只在根 build.gradle ext）；仓库只在 settings.gradle 声明（FAIL_ON_PROJECT_REPOS）；Release 使用 optimization DSL，应用级规则只能放在 app/src/main/keepRules/*.keep",
       "5.6.0 起 minSdk 为 24；androidTest 依赖与应用运行时一致解析，不要为应用未直接声明的传递库指定版本",
       "物理键盘模式以 CandidateView 为输入视图，窗口只在有候选时经 requestShowSelf 显式显示、清空后 requestHideSelf；不得改回只靠 setCandidatesViewShown 的候选窗口（Android 11 起不绘制），也不得复用已从窗口移除的输入视图（生命周期 DESTROYED 后观察者已清空）",
-      "白霜、雾凇中文方案模板引用 selfopt_pure_chinese.lua：所有词库路径（内置、发布包、手机端构建、恢复默认）都必须携带该 lua，雾凇包携带同名文件由 DictionaryStore 放行，词库索引 minAppVersion 不得低于 50600"
+      "白霜、雾凇中文方案模板引用 selfopt_pure_chinese.lua：所有词库路径（内置、发布包、手机端构建、恢复默认）都必须携带该 lua，雾凇包携带同名文件由 DictionaryStore 放行，词库索引 minAppVersion 不得低于 50600",
+      "AGP 9 的 R8 严格模式下 -keep class 不隐含无参构造函数：凡经反射按类名实例化的类（如 ML Kit 的 ComponentRegistrar）必须在规则中写明 <init>()；改动混淆规则或升级依赖后须在 Release 包实测手写等反射路径"
     ]
   }
 }
