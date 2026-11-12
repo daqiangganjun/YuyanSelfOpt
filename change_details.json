@@ -3,6 +3,31 @@
   "updatedAt": "2026-11-12",
   "entries": [
     {
+      "id": "20261112-02",
+      "date": "2026-11-12",
+      "type": "chore",
+      "title": "推送并正式发布语燕SelfOpt 5.6.0",
+      "trigger": "用户真机测试通过后要求手动推送并发布 release；CI 自动构建暂记入 TODO.md。",
+      "rootCause": "5.6.0 包含上游同步、构建迁移、物理键盘、检查更新与手写修复，此前按约定只在本地提交；词库索引最低应用版本已提至 50600，推送后需尽快发布应用，避免 5.5.0 用户长时间只能看到需要更新的提示。",
+      "solution": "先推送 yuyansdk（642dfcb..8198bbc）再推送主仓库（67ce9f5..2ae0878），两个仓库相对上游均落后 0 个提交；手动触发 dictionaries.yml 发布新词库包（索引 minAppVersion 50600）。工作区干净后重新构建 Release，在 2ae0878 上创建附注标签 selfopt-v5.6.0 并推送，用 gh 发布「语燕 SelfOpt 5.6.0」并上传安装包。发布说明重点标注最低 Android 7.0、词库更新需 5.6.0 及雾凇需更新词库包后中英混输开关才生效，不含设备与个人信息。之后回填本批条目的主仓库提交哈希。",
+      "changedFiles": [
+        "change_log.md、change_details.json：回填 20261110-01 至 20261112-01 的主仓库提交，新增本条，更新 latestVerifiedRelease"
+      ],
+      "verification": "Release 构建后两个仓库无未提交改动；apksigner 验证 v2 签名通过且证书与此前版本一致，zipalign -c -P 16 通过，aapt2 显示 versionCode 50600、versionName 5.6.0、minSdk 24、仅 arm64-v8a，dex 内嵌源码标识 2ae08780a2b5968aeeec7c3ea38e78a40d9ca45f 且不带 -dirty。dictionaries.yml 手动运行成功，远端 index.json 的 minAppVersion 为 50600。发布后下载远端附件，SHA256 为 8a1802c8e3d5fc4452dad4e50615bb745a55cfc28f2dc0d6a334606ca7f3a2b5，与本地一致，大小 51930384 字节；release 非草稿、非预发布，releases/latest 指向 selfopt-v5.6.0。",
+      "commits": {
+        "main": "2ae08780a2b5968aeeec7c3ea38e78a40d9ca45f",
+        "yuyansdk": "8198bbc6f39cd0e0a359b7494b120b992c3cc05a"
+      },
+      "lessons": [
+        "词库索引提高 minAppVersion 后，推送与应用发布应在同一时段完成，并手动触发词库工作流，缩短旧版用户无可用新版的空档。"
+      ],
+      "release": {
+        "tag": "selfopt-v5.6.0",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.6.0",
+        "sha256": "8a1802c8e3d5fc4452dad4e50615bb745a55cfc28f2dc0d6a334606ca7f3a2b5"
+      }
+    },
+    {
       "id": "20261112-01",
       "date": "2026-11-12",
       "type": "fix",
@@ -19,7 +44,7 @@
       ],
       "verification": "以 mapping.txt 还原崩溃堆栈定位到 MlKitHandwritingModel.refreshState 与 ComponentDiscovery 的 NoSuchMethodException；修复后 seeds.txt 含两个注册类构造函数。真机上逐步检查 mInTouchMode：Termius 中点击后为触摸模式，输入字母保持，退格后变为非触摸模式；sudonote 中退格保持触摸模式。修复后的 Release 由用户在真机确认手写识别、模型状态与删除、终端模式徽标及连续手写候选栏均正常。HandwritingSessionTest 的测试包被该机系统拒绝安装（Failure -99），未在设备上运行。",
       "commits": {
-        "main": "待回填",
+        "main": "2ae08780a2b5968aeeec7c3ea38e78a40d9ca45f",
         "yuyansdk": "8198bbc6f39cd0e0a359b7494b120b992c3cc05a"
       },
       "lessons": [
@@ -49,7 +74,7 @@
       ],
       "verification": "Debug、Release、androidTest 构建通过。16KB AVD（开启硬件键盘、关闭显示屏幕键盘、默认九键方案）上：输入 nihao 时候选栏紧贴光标显示 1~9 序号候选，方案已自动换为全拼；↓ 翻页序号重排；按 1 上屏你好后窗口收起；shi 后按 Esc 取消且不上屏；Ctrl+Space 英文输入 ab cd 只有一个空格；zhongw 退格两次后空格上屏中。打开系统显示屏幕键盘并换输入框后出现九键软键盘，按 6、4 得到 ni 及左侧拼音列，方案恢复九键。「关于 → 检查更新」在 5.6.0 提示已是最新；临时以 5.4.0 构建降级安装后弹出「发现新版本 5.5.0」及说明，「下载安装包」交给 Chrome 打开 GitHub 链接。crash 缓冲区为空。",
       "commits": {
-        "main": "待回填",
+        "main": "f6e8fc2fa134adc4eb38a2f6d45be4cf349068a3",
         "yuyansdk": "2c04c1cdc1ea4b3e38eb735287a281f672847a70"
       },
       "lessons": [
@@ -79,7 +104,7 @@
       ],
       "verification": "Gradle 9.9.0 下 help 配置无弃用警告；不使用镜像直连完成 Debug、Release 与 androidTest APK 构建；foojay 下载 Adoptium JDK 17。Debug 包语言资源仅 zh，lib/arm64-v8a 含 libselfopt_rime.so 与 libdigitalink.so，zipalign -c -P 16 通过；BuildConfig 为 versionName 5.6.0、AppCommitHead 取主仓库 HEAD。Release 包 52706764 字节，v1/v2 签名与 5.5.0 一致，16KB 对齐通过；在 16KB AVD 上覆盖安装后软键盘拼音、候选、剪贴板、常用语列表（依赖反射 keep 规则）及新常用语编辑器保存均正常，crash 缓冲区为空。 在 16KB AVD 上执行 100 项设备集成回归：首轮 2 项失败，其一是该 AVD 上为测试关闭了中英混输导致 hello 被过滤，恢复开关后通过；其二为 5.5.0 把剪贴板搜索移入工具栏后测试预期未同步，修正后通过，其余 98 项首轮即通过。",
       "commits": {
-        "main": "待回填",
+        "main": "611bef937d424cdeaec04481edf49ec3f30b6037",
         "yuyansdk": "8977ec6653c275bcdc846e8c7c160fd06436063f"
       },
       "lessons": [
@@ -113,7 +138,7 @@
       ],
       "verification": "旧工具链下 Kotlin 编译与完整 Debug 构建通过，内置 rime-selfopt.zip 含 lua/selfopt_pure_chinese.lua，9 个白霜模板引用过滤器。雷电模拟器（Android 14）：系统开启「物理键盘显示屏幕键盘」时软键盘显示且按键交给软键盘，显示与路由一致。16KB AVD（开启硬件键盘）物理键盘模式按上屏文本验证：shi+1 取当前页首个候选，shi+↓+1 取第二页首个候选，→×2+空格取第三个，无候选时数字原样转发，英文模式 ab 空格 cd 只出一个空格，Ctrl+Space 往返不多出空格；中英混输开启时 iphone、kalaok 上屏 iPhone、卡拉OK，关闭后为 iphone（原文候选）、卡老款，nihao 仍为你好。临时恢复改动前的三个文件对照，确认悬浮候选栏不显示属原有问题。常用语编辑器、手写笔迹与菜单拖动的触屏交互由用户真机验证。",
       "commits": {
-        "main": "待回填",
+        "main": "611bef937d424cdeaec04481edf49ec3f30b6037",
         "yuyansdk": "22a965a0e4c5bde59e7c32bb2a04af173e6a8aa9"
       },
       "lessons": [
@@ -2712,13 +2737,13 @@
         "configureCommand": "cmake -S tmp_rime_jni -B tmp_rime_jni/build -G Ninja -DCMAKE_MAKE_PROGRAM=<sdk>/cmake/3.31.6/bin/ninja.exe -DCMAKE_TOOLCHAIN_FILE=<sdk>/ndk/28.2.13676358/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release"
       },
       "latestVerifiedRelease": {
-        "tag": "selfopt-v5.5.0",
-        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.5.0",
-        "mainCommit": "4908ccbd9fef7df2845ef5df8f529818e77af1a8",
-        "sdkCommit": "642dfcb3eb56c75029dbe0ac49b218a23563cbf6",
-        "artifact": "yuyanSelfOpt_5.5.0_release.apk",
-        "sha256": "83a8a5c071f9b92fc813f01644085001c3f17962c9a7b2c320c8579b81819f19",
-        "verification": "2026-11-09从已提交源码构建，验证签名、版本、源码标识、ZIP与ELF 16KB对齐；发布后下载远端附件，SHA256一致，确认为正式版并标记为latest。"
+        "tag": "selfopt-v5.6.0",
+        "url": "https://github.com/daqiangganjun/YuyanSelfOpt/releases/tag/selfopt-v5.6.0",
+        "mainCommit": "2ae08780a2b5968aeeec7c3ea38e78a40d9ca45f",
+        "sdkCommit": "8198bbc6f39cd0e0a359b7494b120b992c3cc05a",
+        "artifact": "yuyanSelfOpt_5.6.0_release.apk",
+        "sha256": "8a1802c8e3d5fc4452dad4e50615bb745a55cfc28f2dc0d6a334606ca7f3a2b5",
+        "verification": "2026-11-12从已提交源码构建，验证签名、版本、minSdk、源码标识、ZIP与ELF 16KB对齐；发布后下载远端附件，SHA256一致，确认为正式版并标记为latest。"
       }
     },
     "codeMap": [
